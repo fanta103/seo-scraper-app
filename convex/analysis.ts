@@ -2,8 +2,7 @@
 
 import { internalAction, action } from "./_generated/server";
 import { v } from "convex/values";
-import { openai } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google";import { generateObject } from "ai";
 import { buildAnalysisPrompt, systemPrompt } from "@/prompts/gpt";
 import { seoReportSchema } from "@/lib/seo-schema";
 import { internal, api } from "./_generated/api";
@@ -13,6 +12,7 @@ import { internal, api } from "./_generated/api";
  * This runs as a background action and can take as long as needed.
  */
 export const runAnalysis = internalAction({
+  
   args: {
     jobId: v.id("scrapingJobs"),
   },
@@ -65,7 +65,7 @@ export const runAnalysis = internalAction({
       console.log("Prompt saved for job:", args.jobId);
 
       const { object: seoReport } = await generateObject({
-        model: openai("gpt-4o"),
+        model: google("gemini-2.5-flash"),
         system: systemPrompt(),
         prompt: analysisPrompt,
         schema: seoReportSchema,
