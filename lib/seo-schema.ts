@@ -1,7 +1,6 @@
 // lib/seo-schema.ts
 // Zod schema for SEO report validation - focused on content analysis from scraping data
 // Removed SERP and on-page sections that require different data sources
-
 import { z } from "zod";
 
 // Base schemas

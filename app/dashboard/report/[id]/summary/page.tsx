@@ -62,9 +62,7 @@ function SummaryPage() {
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 space-y-8 lg:space-y-12">
         <OverallScoreCard seoReport={seoReport} />
         <KeyMetricsGrid seoReport={seoReport} />
-        {/* <Protect plan="pro" fallback={<AIChatUpsellCard />}>
-           <AIChat seoReportId={id} />
-        </Protect> */}
+        <AIChat seoReportId={id} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           <SourceDistributionChart seoReport={seoReport} />
