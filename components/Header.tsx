@@ -27,12 +27,11 @@ function Header() {
     <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className={`sticky top-0 w-full border-b bg-background/60 backdrop-blur-xl z-50 transition-colors duration-500 ${
-        isPricingPage ? "border-transparent" : "border-border"
-      }`}
+      className={`sticky top-0 w-full border-b bg-background/60 backdrop-blur-xl z-50 transition-colors duration-500 ${isPricingPage ? "border-transparent" : "border-border"
+        }`}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        
+
         {/* --- DYNAMIC LOGO SECTION --- */}
         <div className="flex items-center">
           <Link href="/" className="group flex items-center gap-3">
@@ -41,12 +40,12 @@ function Header() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <span className="z-10 text-lg">B</span>
+              <span className="z-10 text-lg">S</span>
               {/* Animated "Liquid" background behind the B */}
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 rounded-xl bg-primary opacity-0 group-hover:opacity-100"
-                animate={{ 
-                  borderRadius: ["20% 80% 70% 30% / 30% 30% 70% 70%", "80% 20% 30% 70% / 70% 30% 70% 30%", "20% 80% 70% 30% / 30% 30% 70% 70%"] 
+                animate={{
+                  borderRadius: ["20% 80% 70% 30% / 30% 30% 70% 70%", "80% 20% 30% 70% / 70% 30% 70% 30%", "20% 80% 70% 30% / 30% 30% 70% 70%"]
                 }}
                 transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
               />
@@ -55,7 +54,7 @@ function Header() {
 
             <div className="flex flex-col">
               <motion.div className="flex overflow-hidden">
-                {"Bright".split("").map((char, i) => (
+                {"Serpify".split("").map((char, i) => (
                   <motion.span
                     key={i}
                     initial={{ y: 0 }}
@@ -67,8 +66,8 @@ function Header() {
                   </motion.span>
                 ))}
               </motion.div>
-              <motion.div 
-                className="h-0.5 bg-primary/40 rounded-full" 
+              <motion.div
+                className="h-0.5 bg-primary/40 rounded-full"
                 initial={{ width: 0 }}
                 whileHover={{ width: "100%" }}
               />
@@ -82,8 +81,8 @@ function Header() {
             <Button variant="ghost" className="relative h-9 px-3 gap-2 overflow-hidden group">
               <BarChart3 className="size-4 group-hover:text-primary transition-colors" />
               <span className="hidden md:inline-block">Dashboard</span>
-              <motion.div 
-                className="absolute inset-0 bg-primary/5 -translate-x-full group-hover:translate-x-0 transition-transform duration-300" 
+              <motion.div
+                className="absolute inset-0 bg-primary/5 -translate-x-full group-hover:translate-x-0 transition-transform duration-300"
               />
             </Button>
           </Link>

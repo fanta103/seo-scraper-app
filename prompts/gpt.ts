@@ -1,21 +1,21 @@
 interface ScrapingDataItem {
-    prompt: string;
-    answer_text: string;
-    sources: Array<{
-      title: string;
-      url: string;
-      description: string;
-    }>;
-    timestamp: string;
+  prompt: string;
+  answer_text: string;
+  sources: Array<{
+    title: string;
     url: string;
-  }
-  
-  /**
-   * Builds the GPT system prompt that converts scraping data
-   * into a comprehensive SEO report with structured output.
-   */
-  export function systemPrompt(): string {
-    return `
+    description: string;
+  }>;
+  timestamp: string;
+  url: string;
+}
+
+/**
+ * Builds the Gemini  system prompt that converts scraping data
+ * into a comprehensive SEO report with structured output.
+ */
+export function systemPrompt(): string {
+  return `
   You are an expert SEO analyst specializing in comprehensive website and entity analysis.
   
   ---
@@ -126,19 +126,19 @@ interface ScrapingDataItem {
   * Unknown fields -> null
   * Special nullable fields: descriptions, competitor names, social URLs, dates can be null if truly unavailable.
   `.trim();
-  }
-  
-  export function buildAnalysisPrompt(scrapingData: ScrapingDataItem[]): string {
-    const formattedData = scrapingData.map((item, index) => ({
-      id: index + 1,
-      prompt: item.prompt,
-      answer_text: item.answer_text,
-      sources: item.sources,
-      timestamp: item.timestamp,
-      url: item.url,
-    }));
-  
-    return `
+}
+
+export function buildAnalysisPrompt(scrapingData: ScrapingDataItem[]): string {
+  const formattedData = scrapingData.map((item, index) => ({
+    id: index + 1,
+    prompt: item.prompt,
+    answer_text: item.answer_text,
+    sources: item.sources,
+    timestamp: item.timestamp,
+    url: item.url,
+  }));
+
+  return `
   Please analyze the following scraping data and generate a comprehensive SEO report.
   
   SCRAPING DATA:
@@ -147,4 +147,4 @@ interface ScrapingDataItem {
   Generate a complete SEO report following the system prompt guidelines. Return only the JSON
   response matching the SeoReport interface structure.
   `.trim();
-  }
+}

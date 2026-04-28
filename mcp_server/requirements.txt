@@ -1,0 +1,4 @@
+scrapling[all]
+mcp
+curl_cffi
+playwright

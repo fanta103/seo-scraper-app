@@ -2,7 +2,7 @@
 
 import { internalAction, action } from "./_generated/server";
 import { v } from "convex/values";
-import { createGoogleGenerativeAI, google } from "@ai-sdk/google";import { generateObject } from "ai";
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google"; import { generateObject } from "ai";
 import { buildAnalysisPrompt, systemPrompt } from "@/prompts/gpt";
 import { seoReportSchema } from "@/lib/seo-schema";
 import { internal, api } from "./_generated/api";
@@ -12,7 +12,7 @@ import { internal, api } from "./_generated/api";
  * This runs as a background action and can take as long as needed.
  */
 export const runAnalysis = internalAction({
-  
+
   args: {
     jobId: v.id("scrapingJobs"),
   },
@@ -25,10 +25,10 @@ export const runAnalysis = internalAction({
       const job = await ctx.runQuery(api.scrapingJobs.getJobById, {
         jobId: args.jobId,
       });
-      
 
 
-          if (!job) {
+
+      if (!job) {
         console.error(`No job found for job ID: ${args.jobId}`);
         return null;
       }
@@ -72,12 +72,6 @@ export const runAnalysis = internalAction({
       });
 
 
-
-
-
-
-
-
       console.log("SEO report generated successfully:", {
         entity_name: seoReport.meta.entity_name,
         entity_type: seoReport.meta.entity_type,
@@ -86,24 +80,24 @@ export const runAnalysis = internalAction({
         recommendations_count: seoReport.recommendations?.length || 0,
         summary_score: seoReport.summary?.overall_score || 0,
       });
-// Step 2: Save the SEO report to the database
-await ctx.runMutation(internal.scrapingJobs.saveSeoReport, {
-    jobId: args.jobId,
-    seoReport: seoReport,
-  });
+      // Step 2: Save the SEO report to the database
+      await ctx.runMutation(internal.scrapingJobs.saveSeoReport, {
+        jobId: args.jobId,
+        seoReport: seoReport,
+      });
 
-  console.log("SEO report saved for job:", args.jobId);
+      console.log("SEO report saved for job:", args.jobId);
 
-  // Step 3: Complete the job (mark as completed)
-  await ctx.runMutation(internal.scrapingJobs.completeJob, {
-    jobId: args.jobId,
-  });
+      // Step 3: Complete the job (mark as completed)
+      await ctx.runMutation(internal.scrapingJobs.completeJob, {
+        jobId: args.jobId,
+      });
       console.log(`Job ${args.jobId} analysis completed successfully`);
 
       return null;
     } catch (error) {
       console.error("Analysis error for job:", args.jobId, error);
-  
+
       // Set job status to failed when analysis fails
       try {
         await ctx.runMutation(api.scrapingJobs.failJob, {
@@ -113,22 +107,22 @@ await ctx.runMutation(internal.scrapingJobs.saveSeoReport, {
               ? error.message
               : "Unknown error occurred during analysis",
         });
-      console.log(`Job ${args.jobId} marked as failed due to analysis error`);
-    } catch (failError) {
-      console.error("Failed to update job status to failed:", failError);
+        console.log(`Job ${args.jobId} marked as failed due to analysis error`);
+      } catch (failError) {
+        console.error("Failed to update job status to failed:", failError);
+      }
+
+      // If it's a schema validation error, provide more specific feedback
+      if (error instanceof Error && error.message.includes("schema")) {
+        console.error("Schema validation failed - AI response incomplete");
+        console.error("Error details:", error.message);
+      }
+
+      return null;
     }
-  
-    // If it's a schema validation error, provide more specific feedback
-    if (error instanceof Error && error.message.includes("schema")) {
-      console.error("Schema validation failed - AI response incomplete");
-      console.error("Error details:", error.message);
-    }
-  
-    return null;
-  }
   },
-  });
-      export const retryAnalysisOnly = action({
+});
+export const retryAnalysisOnly = action({
   args: {
     jobId: v.id("scrapingJobs"),
   },

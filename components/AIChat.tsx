@@ -78,9 +78,9 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
               </div>
             )}
 
-            {messages.map((message) => (
+            {messages.map((message, idx) => (
               <div
-                key={message.id}
+                key={`${message.id}-${idx}`}
                 className={cn(
                   "flex",
                   message.role === "user" ? "justify-end" : "justify-start"
@@ -95,6 +95,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                   )}
                 >
                   {message.parts.map((part, i) => {
+                    console.log("Message part:", part);
                     if (part.type === "tool-web_search") {
                       switch (part.state) {
                         case "input-streaming":
