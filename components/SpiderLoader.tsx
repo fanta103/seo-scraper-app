@@ -2,11 +2,32 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: number }) => {
+export const SpiderLoader = ({
+  size = 60,
+  speed = 1,
+  variant = 'left'
+}: {
+  size?: number;
+  speed?: number;
+  variant?: 'left' | 'right'
+}) => {
+  // Purple theme for 'left' (Extraction), Blue/Cyan theme for 'right' (Analysis)
   const purple = "#9b6dff";
   const lightPurple = "#c4a7ff";
   const darkPurple = "#6e4bb3";
+
+  const cyan = "#86d9ff";
+  const lightCyan = "#bdeaff";
+  const darkCyan = "#4a8bb3";
+
+  const mainColor = variant === 'left' ? purple : cyan;
+  const secondaryColor = variant === 'left' ? lightPurple : lightCyan;
+  const bodyColor = variant === 'left' ? darkPurple : darkCyan;
   const eyeColor = "#1a1a1a";
+
+  // Extraction animation (crawling/fetching)
+  const bounceY = variant === 'left' ? [0, -6, 0] : [0, -3, 0];
+  const scale = variant === 'right' ? [1, 1.05, 1] : [1, 1.02, 1]; // Right spider "thinks" (pulses more)
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
@@ -14,7 +35,7 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
       <motion.svg
         viewBox="0 0 100 100"
         className="absolute inset-0 w-full h-full opacity-20"
-        animate={{ rotate: 360 }}
+        animate={{ rotate: variant === 'left' ? 360 : -360 }}
         transition={{ duration: 10 / speed, repeat: Infinity, ease: "linear" }}
       >
         <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="0.5" fill="none" strokeDasharray="4 4" />
@@ -37,7 +58,7 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
         viewBox="0 0 100 100"
         width={size * 0.8}
         height={size * 0.8}
-        animate={{ y: [0, -4, 0] }}
+        animate={{ y: bounceY, rotate: variant === 'right' ? [0, 2, -2, 0] : 0 }}
         transition={{ duration: 2 / speed, repeat: Infinity, ease: "easeInOut" }}
       >
         {/* Legs - Left */}
@@ -49,11 +70,15 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
           <motion.path
             key={leg.id}
             d={leg.d}
-            stroke={purple}
+            stroke={mainColor}
             strokeWidth="6"
             strokeLinecap="round"
             fill="none"
-            animate={{ d: [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) - 5} ${parseInt(y) - 5}`), leg.d] }}
+            animate={{
+              d: variant === 'left'
+                ? [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) - 5} ${parseInt(y) - 5}`), leg.d]
+                : [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) - 2} ${parseInt(y) - 2}`), leg.d]
+            }}
             transition={{ duration: 1 / speed, repeat: Infinity, ease: "easeInOut", delay: leg.delay }}
           />
         ))}
@@ -67,26 +92,30 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
           <motion.path
             key={leg.id}
             d={leg.d}
-            stroke={purple}
+            stroke={mainColor}
             strokeWidth="6"
             strokeLinecap="round"
             fill="none"
-            animate={{ d: [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) + 5} ${parseInt(y) - 5}`), leg.d] }}
+            animate={{
+              d: variant === 'left'
+                ? [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) + 5} ${parseInt(y) - 5}`), leg.d]
+                : [leg.d, leg.d.replace(/(\d+)\s+(\d+)$/, (_, x, y) => `${parseInt(x) + 2} ${parseInt(y) - 2}`), leg.d]
+            }}
             transition={{ duration: 1 / speed, repeat: Infinity, ease: "easeInOut", delay: leg.delay }}
           />
         ))}
 
         {/* Body (Back) */}
-        <ellipse cx="50" cy="70" rx="22" ry="18" fill={darkPurple} />
-        
+        <ellipse cx="50" cy="70" rx="22" ry="18" fill={bodyColor} />
+
         {/* Head */}
         <motion.ellipse
           cx="50"
           cy="50"
           rx="20"
           ry="18"
-          fill={purple}
-          animate={{ scale: [1, 1.02, 1] }}
+          fill={mainColor}
+          animate={{ scale: scale }}
           transition={{ duration: 2 / speed, repeat: Infinity, ease: "easeInOut" }}
         />
 
@@ -98,20 +127,20 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
           {/* Tiny side eyes */}
           <circle cx="35" cy="45" r="2" fill={eyeColor} />
           <circle cx="65" cy="45" r="2" fill={eyeColor} />
-          
+
           {/* Highlights */}
           <circle cx="43" cy="46" r="1.5" fill="white" opacity="0.8" />
           <circle cx="59" cy="46" r="1.5" fill="white" opacity="0.8" />
         </g>
 
         {/* Cheeks */}
-        <circle cx="38" cy="58" r="3" fill={lightPurple} opacity="0.4" />
-        <circle cx="62" cy="58" r="3" fill={lightPurple} opacity="0.4" />
+        <circle cx="38" cy="58" r="3" fill={secondaryColor} opacity="0.4" />
+        <circle cx="62" cy="58" r="3" fill={secondaryColor} opacity="0.4" />
 
         {/* Little Fangs/Mandibles */}
         <motion.path
           d="M 45 62 Q 45 68 42 70"
-          stroke={lightPurple}
+          stroke={secondaryColor}
           strokeWidth="3"
           strokeLinecap="round"
           fill="none"
@@ -120,7 +149,7 @@ export const SpiderLoader = ({ size = 60, speed = 1 }: { size?: number; speed?: 
         />
         <motion.path
           d="M 55 62 Q 55 68 58 70"
-          stroke={lightPurple}
+          stroke={secondaryColor}
           strokeWidth="3"
           strokeLinecap="round"
           fill="none"

@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText } from "lucide-react";
 import remarkGfm from "remark-gfm";
 import { SpiderLoader } from "@/components/SpiderLoader";
+import { motion, AnimatePresence } from "framer-motion";
 
 function AIChat({ seoReportId }: { seoReportId: string }) {
   const [input, setInput] = useState("");
@@ -121,103 +122,157 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                       const isToolCall = part.type === "tool-invocation" || part.type === "tool-call" || part.type === "tool-result";
                       const isStealthyFetch = (isToolCall && (partAny.toolInvocation?.toolName === "stealthy_fetch" || partAny.toolName === "stealthy_fetch")) || part.type === "tool-stealthy_fetch";
 
-                      if (isStealthyFetch) {
-                        const toolInvocation = partAny.toolInvocation || partAny;
-                        const state = partAny.state || toolInvocation.state || (part.type === "tool-call" ? "call" : part.type === "tool-result" ? "result" : undefined);
-                        const { args, result } = toolInvocation;
-                        const url = args?.url || "the website";
+                        if (isStealthyFetch) {
+                          const toolInvocation = partAny.toolInvocation || partAny;
+                          const state = partAny.state || toolInvocation.state || (part.type === "tool-call" ? "call" : part.type === "tool-result" ? "result" : undefined);
+                          const { args } = toolInvocation;
+                          const url = args?.url || "the website";
 
-                        if (state === "call" || state === "input-streaming" || state === "input-available") {
+                          const isLastAssistantMessage = message.role === "assistant" && idx === messages.length - 1;
+                          const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
+
+                          // Phase detection
+                          const phase = (state === "call" || state === "input-streaming" || state === "input-available") 
+                            ? "extraction" 
+                            : (isCurrentlyStreaming ? "analysis" : "complete");
+
                           return (
-                            <div key={`${message.id}-${i}`} className="flex items-center gap-4 p-5 my-4 bg-indigo-50/40 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 rounded-[2rem] shadow-sm ring-1 ring-indigo-500/5 transition-all duration-700">
-                              <div className="relative">
-                                <SpiderLoader size={54} speed={1.2} />
-                              </div>
-                              <div className="flex flex-col flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold text-indigo-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-700/30 shadow-sm">Scrapling Bot</span>
-                                  <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full animate-pulse" />
-                                  <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">Deep Extraction Phase</span>
-                                </div>
-                                <div className="mt-2.5">
-                                  <div className="text-[13px] font-medium text-indigo-900/80 dark:text-indigo-100/80">
-                                    Auditing <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{url.replace(/^https?:\/\//, '')}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 mt-1">
-                                    <div className="flex gap-0.5">
-                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" />
+                            <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
+                              <AnimatePresence mode="wait">
+                                {phase === "extraction" && (
+                                  <motion.div
+                                    key="extraction"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.5, ease: "easeOut" }}
+                                    className="flex items-center gap-4 p-5 bg-indigo-50/40 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 rounded-[2rem] shadow-sm ring-1 ring-indigo-500/5"
+                                  >
+                                    <div className="shrink-0">
+                                      <SpiderLoader size={54} speed={1.2} variant="left" />
                                     </div>
-                                    <div className="text-[10px] text-indigo-400/80 font-medium italic">Bypassing anti-bot protections...</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        if (state === "result" || state === "output-available") {
-                          const resultData = toolInvocation.output || toolInvocation.result;
-                          const isError = resultData?.error || !resultData;
-                          const errorText = resultData?.errorText || resultData?.error || "Unknown error";
-
-                          return (
-                            <div key={`${message.id}-${i}`} className={cn(
-                              "flex items-center gap-3 p-4 my-3 border rounded-2xl transition-all duration-500 hover:shadow-md",
-                              isError
-                                ? "bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-800/50 shadow-red-500/5"
-                                : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/50 shadow-emerald-500/5"
-                            )}>
-                              <div className={cn(
-                                "p-2.5 rounded-xl shadow-sm border",
-                                isError
-                                  ? "bg-white dark:bg-red-900/40 border-red-100 dark:border-red-700/50"
-                                  : "bg-white dark:bg-emerald-900/40 border-emerald-100 dark:border-emerald-700/50"
-                                )}>
-                                {isError ? (
-                                  <X className="w-5 h-5 text-red-600 dark:text-red-400" />
-                                ) : (
-                                  <Zap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-indigo-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-700/30 shadow-sm">Scrapling Bot</span>
+                                        <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full animate-pulse" />
+                                        <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">Extraction Phase</span>
+                                      </div>
+                                      <div className="mt-2.5">
+                                        <div className="text-[13px] font-medium text-indigo-900/80 dark:text-indigo-100/80 truncate">
+                                          Auditing <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{url.replace(/^https?:\/\//, '')}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          <div className="flex gap-0.5">
+                                            <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                            <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                            <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" />
+                                          </div>
+                                          <div className="text-[10px] text-indigo-400/80 font-medium italic">Bypassing anti-bot protections...</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </motion.div>
                                 )}
-                              </div>
-                              <div className="flex flex-col flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={cn(
-                                    "text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
-                                    isError ? "text-red-600 bg-red-100 dark:bg-red-900/60" : "text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60"
-                                  )}>Scrapling Bot</span>
-                                  <span className={cn(
-                                    "w-1 h-1 rounded-full",
-                                    isError ? "bg-red-300 dark:bg-red-700" : "bg-emerald-300 dark:bg-emerald-700"
-                                  )} />
-                                  <span className={cn(
-                                    "text-[10px] font-medium uppercase tracking-widest",
-                                    isError ? "text-red-500" : "text-emerald-500"
-                                  )}>Audit {isError ? "Failed" : "Success"}</span>
-                                </div>
-                                <div className="mt-2">
-                                  <div className={cn(
-                                    "text-sm font-semibold",
-                                    isError ? "text-red-900 dark:text-red-100" : "text-emerald-900 dark:text-emerald-100"
-                                  )}>
-                                    {isError ? "Verification Failed" : "DOM Analysis Complete"}
-                                  </div>
-                                  {!isError ? (
-                                    <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/60 font-mono mt-1">
-                                      Metadata, structure, and accessibility tags extracted.
+
+                                {phase === "analysis" && (
+                                  <motion.div
+                                    key="analysis"
+                                    initial={{ opacity: 0, scale: 1.05 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.5, ease: "easeOut" }}
+                                    className="flex items-center gap-4 p-5 bg-indigo-50/40 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 rounded-[2rem] shadow-sm ring-1 ring-indigo-500/5"
+                                  >
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-cyan-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-cyan-100/50 dark:border-indigo-700/30 shadow-sm">Scrapling Bot</span>
+                                        <span className="w-1 h-1 bg-cyan-300 dark:bg-cyan-700 rounded-full animate-pulse" />
+                                        <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest">Analysis Phase</span>
+                                      </div>
+                                      <div className="mt-2.5">
+                                        <div className="text-[13px] font-medium text-indigo-900/80 dark:text-indigo-100/80">
+                                          Processing <span className="text-cyan-600 dark:text-cyan-400 font-semibold">Technical Data</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          <div className="text-[10px] text-cyan-400/80 font-medium italic">Generating insights and SEO report...</div>
+                                          <div className="flex gap-0.5">
+                                            <span className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse" />
+                                            <span className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse [animation-delay:0.2s]" />
+                                            <span className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse [animation-delay:0.4s]" />
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
-                                  ) : (
-                                    <div className="text-[10px] text-red-600/80 dark:text-red-400/60 font-mono mt-1">
-                                      {errorText}
+                                    <div className="shrink-0">
+                                      <SpiderLoader size={54} speed={0.8} variant="right" />
                                     </div>
-                                  )}
-                                </div>
-                              </div>
+                                  </motion.div>
+                                )}
+
+                                {phase === "complete" && (
+                                  <motion.div
+                                    key="complete"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={cn(
+                                      "flex items-center gap-3 p-4 border rounded-2xl transition-all duration-500 hover:shadow-md",
+                                      (toolInvocation.output || toolInvocation.result)?.error
+                                        ? "bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-800/50 shadow-red-500/5"
+                                        : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/50 shadow-emerald-500/5"
+                                    )}
+                                  >
+                                    {/* Existing completion logic */}
+                                    <div className={cn(
+                                      "p-2.5 rounded-xl shadow-sm border",
+                                      (toolInvocation.output || toolInvocation.result)?.error
+                                        ? "bg-white dark:bg-red-900/40 border-red-100 dark:border-red-700/50"
+                                        : "bg-white dark:bg-emerald-900/40 border-emerald-100 dark:border-emerald-700/50"
+                                      )}>
+                                      {(toolInvocation.output || toolInvocation.result)?.error ? (
+                                        <X className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                      ) : (
+                                        <Zap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className={cn(
+                                          "text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
+                                          (toolInvocation.output || toolInvocation.result)?.error ? "text-red-600 bg-red-100 dark:bg-red-900/60" : "text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60"
+                                        )}>Scrapling Bot</span>
+                                        <span className={cn(
+                                          "w-1 h-1 rounded-full",
+                                          (toolInvocation.output || toolInvocation.result)?.error ? "bg-red-300 dark:bg-red-700" : "bg-emerald-300 dark:bg-emerald-700"
+                                        )} />
+                                        <span className={cn(
+                                          "text-[10px] font-medium uppercase tracking-widest",
+                                          (toolInvocation.output || toolInvocation.result)?.error ? "text-red-500" : "text-emerald-500"
+                                        )}>Audit {(toolInvocation.output || toolInvocation.result)?.error ? "Failed" : "Success"}</span>
+                                      </div>
+                                      <div className="mt-2">
+                                        <div className={cn(
+                                          "text-sm font-semibold",
+                                          (toolInvocation.output || toolInvocation.result)?.error ? "text-red-900 dark:text-red-100" : "text-emerald-900 dark:text-emerald-100"
+                                        )}>
+                                          {(toolInvocation.output || toolInvocation.result)?.error ? "Verification Failed" : "DOM Analysis Complete"}
+                                        </div>
+                                        {!(toolInvocation.output || toolInvocation.result)?.error ? (
+                                          <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/60 font-mono mt-1">
+                                            Metadata, structure, and accessibility tags extracted.
+                                          </div>
+                                        ) : (
+                                          <div className="text-[10px] text-red-600/80 dark:text-red-400/60 font-mono mt-1">
+                                            {(toolInvocation.output || toolInvocation.result)?.errorText || (toolInvocation.output || toolInvocation.result)?.error || "Unknown error"}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                           );
                         }
-                      }
 
                       if (part.type === "text") {
                         const cleanText = part.text.replace(/\[SEARCHING_WEB\]/g, "").trim();
