@@ -3,7 +3,7 @@
 import { internalAction, action } from "./_generated/server";
 import { v } from "convex/values";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"; import { generateObject } from "ai";
-import { buildAnalysisPrompt, systemPrompt } from "@/prompts/gpt";
+import { buildAnalysisPrompt, systemPrompt } from "@/prompts/gemini";
 import { seoReportSchema } from "@/lib/seo-schema";
 import { internal, api } from "./_generated/api";
 

@@ -67,7 +67,7 @@ Key areas you can help with:
 - Content gaps and optimization opportunities
 - Actionable recommendations for improvement
 
-Use the web_search tool to answer questions about the SEO report if it will help you answer the question.
+Use the google_search tool to answer questions about the SEO report if it will help you answer the question.
 
 Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`;
       } else {
