@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText } from "lucide-react";
 import remarkGfm from "remark-gfm";
+import { SpiderLoader } from "@/components/SpiderLoader";
 
 function AIChat({ seoReportId }: { seoReportId: string }) {
   const [input, setInput] = useState("");
@@ -128,22 +129,28 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
 
                         if (state === "call" || state === "input-streaming" || state === "input-available") {
                           return (
-                            <div key={`${message.id}-${i}`} className="flex items-center gap-3 p-4 my-3 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl animate-pulse ring-1 ring-indigo-500/10">
-                              <div className="p-2.5 bg-white dark:bg-indigo-900/40 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-700/50">
-                                <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            <div key={`${message.id}-${i}`} className="flex items-center gap-4 p-5 my-4 bg-indigo-50/40 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 rounded-[2rem] shadow-sm ring-1 ring-indigo-500/5 transition-all duration-700">
+                              <div className="relative">
+                                <SpiderLoader size={54} speed={1.2} />
                               </div>
                               <div className="flex flex-col flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 rounded-md">Scrapling Bot</span>
-                                    <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full" />
-                                    <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-widest">Stealth Audit</span>
-                                  </div>
-                                  <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-indigo-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-700/30 shadow-sm">Scrapling Bot</span>
+                                  <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full animate-pulse" />
+                                  <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">Deep Extraction Phase</span>
                                 </div>
-                                <div className="mt-2 space-y-1">
-                                  <div className="text-sm font-medium text-indigo-900 dark:text-indigo-100 truncate">Auditing {url.replace(/^https?:\/\//, '')}</div>
-                                  <div className="text-[10px] text-indigo-500/80 font-mono">Bypassing anti-bot protections...</div>
+                                <div className="mt-2.5">
+                                  <div className="text-[13px] font-medium text-indigo-900/80 dark:text-indigo-100/80">
+                                    Auditing <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{url.replace(/^https?:\/\//, '')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="flex gap-0.5">
+                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                      <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" />
+                                    </div>
+                                    <div className="text-[10px] text-indigo-400/80 font-medium italic">Bypassing anti-bot protections...</div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
