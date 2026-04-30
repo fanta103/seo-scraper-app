@@ -67,7 +67,8 @@ Key areas you can help with:
 - Content gaps and optimization opportunities
 - Actionable recommendations for improvement
 
-Use the google_search built-in tool to answer questions about the SEO report if it will help you answer the question.
+Use your native google_search tool to answer questions about the SEO report if it will help you answer the question.
+IMPORTANT: Whenever you are about to search the web, you MUST start your response with exactly this token on its own line: [SEARCHING_WEB] - then proceed with the search and your answer. Do not skip this token when performing any web search.
 
 Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`;
       } else {
@@ -96,7 +97,10 @@ Report your findings clearly and concisely.`;
     model: google("gemini-2.5-flash"),
     messages: await convertToModelMessages(messages),
     system: systemPrompt,
-    tools: mcpTools,
+    tools: {
+      //google_search: google.tools.googleSearch({}),
+      ...mcpTools,
+    },
   });
 
   return result.toUIMessageStreamResponse();
