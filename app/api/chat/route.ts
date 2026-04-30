@@ -84,7 +84,13 @@ Provide specific, data-driven insights based on the actual report data. When ref
   systemPrompt += `
 
 You are equipped with the Scrapling MCP Server which provides web scraping tools for Technical SEO audits.
-If the user asks for a technical SEO audit, it s compulsory to use the 'stealthy_fetch' tool with main_content_only=False and 'extraction_type="html"'.
+If the user asks for a technical SEO audit, you MUST use the 'stealthy_fetch' tool.
+TOOL PARAMETERS FOR 'stealthy_fetch':
+- url: The full URL to audit (compulsory)
+- main_content_only: false (compulsory for SEO audits)
+- extraction_type: "html" (compulsory for SEO audits)
+Do NOT invent or guess other parameters.
+
 When analyzing the fetched HTML for technical SEO, check for:
 - Meta tags: <title>, <meta name="description">, and <meta name="robots">.
 - Canonical link: <link rel="canonical" href="...">
@@ -99,7 +105,7 @@ Report your findings clearly and concisely.`;
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-      //google_search: google.tools.googleSearch({}),
+      google_search: google.tools.googleSearch({}),
       ...mcpTools,
     },
   });
