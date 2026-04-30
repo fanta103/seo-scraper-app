@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import { MessageCircle, X, Send, Loader2, Globe } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText } from "lucide-react";
 import remarkGfm from "remark-gfm";
 
 function AIChat({ seoReportId }: { seoReportId: string }) {
@@ -89,8 +89,12 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
             )}
 
             {messages.map((message, idx) => {
-              const hasVisibleContent = message.parts.some(part => 
-                part.type === "text" && part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0
+              const hasVisibleContent = message.parts.some(part =>
+                (part.type === "text" && part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0) ||
+                (part.type === "tool-invocation") ||
+                (part.type === "tool-call") ||
+                (part.type === "tool-result") ||
+                (part.type as string).startsWith("tool-")
               );
 
               if (!hasVisibleContent) return null;
@@ -112,6 +116,102 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                     )}
                   >
                     {message.parts.map((part, i) => {
+                      const partAny = part as any;                      // Handle Tool Invocations (like stealthy_fetch from MCP)
+                      const isToolCall = part.type === "tool-invocation" || part.type === "tool-call" || part.type === "tool-result";
+                      const isStealthyFetch = (isToolCall && (partAny.toolInvocation?.toolName === "stealthy_fetch" || partAny.toolName === "stealthy_fetch")) || part.type === "tool-stealthy_fetch";
+
+                      if (isStealthyFetch) {
+                        const toolInvocation = partAny.toolInvocation || partAny;
+                        const state = partAny.state || toolInvocation.state || (part.type === "tool-call" ? "call" : part.type === "tool-result" ? "result" : undefined);
+                        const { args, result } = toolInvocation;
+                        const url = args?.url || "the website";
+
+                        if (state === "call" || state === "input-streaming" || state === "input-available") {
+                          return (
+                            <div key={`${message.id}-${i}`} className="flex items-center gap-3 p-4 my-3 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl animate-pulse ring-1 ring-indigo-500/10">
+                              <div className="p-2.5 bg-white dark:bg-indigo-900/40 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-700/50">
+                                <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                              </div>
+                              <div className="flex flex-col flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 rounded-md">Scrapling Bot</span>
+                                    <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full" />
+                                    <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-widest">Stealth Audit</span>
+                                  </div>
+                                  <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                                </div>
+                                <div className="mt-2 space-y-1">
+                                  <div className="text-sm font-medium text-indigo-900 dark:text-indigo-100 truncate">Auditing {url.replace(/^https?:\/\//, '')}</div>
+                                  <div className="text-[10px] text-indigo-500/80 font-mono">Bypassing anti-bot protections...</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (state === "result" || state === "output-available") {
+                          const resultData = toolInvocation.output || toolInvocation.result;
+                          const isError = resultData?.error || !resultData;
+                          const errorText = resultData?.errorText || resultData?.error || "Unknown error";
+
+                          return (
+                            <div key={`${message.id}-${i}`} className={cn(
+                              "flex items-center gap-3 p-4 my-3 border rounded-2xl transition-all duration-500 hover:shadow-md",
+                              isError
+                                ? "bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-800/50 shadow-red-500/5"
+                                : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/50 shadow-emerald-500/5"
+                            )}>
+                              <div className={cn(
+                                "p-2.5 rounded-xl shadow-sm border",
+                                isError
+                                  ? "bg-white dark:bg-red-900/40 border-red-100 dark:border-red-700/50"
+                                  : "bg-white dark:bg-emerald-900/40 border-emerald-100 dark:border-emerald-700/50"
+                                )}>
+                                {isError ? (
+                                  <X className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                ) : (
+                                  <Zap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                )}
+                              </div>
+                              <div className="flex flex-col flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={cn(
+                                    "text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
+                                    isError ? "text-red-600 bg-red-100 dark:bg-red-900/60" : "text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60"
+                                  )}>Scrapling Bot</span>
+                                  <span className={cn(
+                                    "w-1 h-1 rounded-full",
+                                    isError ? "bg-red-300 dark:bg-red-700" : "bg-emerald-300 dark:bg-emerald-700"
+                                  )} />
+                                  <span className={cn(
+                                    "text-[10px] font-medium uppercase tracking-widest",
+                                    isError ? "text-red-500" : "text-emerald-500"
+                                  )}>Audit {isError ? "Failed" : "Success"}</span>
+                                </div>
+                                <div className="mt-2">
+                                  <div className={cn(
+                                    "text-sm font-semibold",
+                                    isError ? "text-red-900 dark:text-red-100" : "text-emerald-900 dark:text-emerald-100"
+                                  )}>
+                                    {isError ? "Verification Failed" : "DOM Analysis Complete"}
+                                  </div>
+                                  {!isError ? (
+                                    <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/60 font-mono mt-1">
+                                      Metadata, structure, and accessibility tags extracted.
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-red-600/80 dark:text-red-400/60 font-mono mt-1">
+                                      {errorText}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                      }
+
                       if (part.type === "text") {
                         const cleanText = part.text.replace(/\[SEARCHING_WEB\]/g, "").trim();
                         if (!cleanText) return null;

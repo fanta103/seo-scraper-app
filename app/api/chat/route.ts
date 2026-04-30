@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { streamText, UIMessage, convertToModelMessages } from "ai";
+import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { auth } from "@clerk/nextjs/server";
@@ -84,7 +84,7 @@ Provide specific, data-driven insights based on the actual report data. When ref
   systemPrompt += `
 
 You are equipped with the Scrapling MCP Server which provides web scraping tools for Technical SEO audits.
-If the user asks for a technical SEO audit, use the 'stealthy_fetch' tool with 'extraction_type="html"'.
+If the user asks for a technical SEO audit, it s compulsory to use the 'stealthy_fetch' tool with main_content_only=False and 'extraction_type="html"'.
 When analyzing the fetched HTML for technical SEO, check for:
 - Meta tags: <title>, <meta name="description">, and <meta name="robots">.
 - Canonical link: <link rel="canonical" href="...">
@@ -97,6 +97,7 @@ Report your findings clearly and concisely.`;
     model: google("gemini-2.5-flash"),
     messages: await convertToModelMessages(messages),
     system: systemPrompt,
+    stopWhen: stepCountIs(5),
     tools: {
       //google_search: google.tools.googleSearch({}),
       ...mcpTools,
