@@ -105,7 +105,7 @@ Report your findings clearly and concisely.`;
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-      google_search: google.tools.googleSearch({}),
+      //google_search: google.tools.googleSearch({}),
       ...mcpTools,
     },
   });

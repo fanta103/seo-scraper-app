@@ -17,4 +17,7 @@ mcp.add_tool(scrapling_api.bulk_stealthy_fetch, title="bulk_stealthy_fetch", des
 mcp.add_tool(scrapling_api.screenshot, title="screenshot", description=scrapling_api.screenshot.__doc__)
 
 print("Starting Scrapling MCP Server on http://127.0.0.1:8000/sse")
-mcp.run(transport="sse")
+try:
+    mcp.run(transport="sse")
+except KeyboardInterrupt:
+    print("\nServer shut down cleanly by user.")
