@@ -9,7 +9,8 @@ export const SpiderLoader = ({
 }: {
   size?: number;
   speed?: number;
-  variant?: 'left' | 'right'
+  // left = purple (extraction), right = cyan (analysis), screenshot = green (rendering), error = red (failed)
+  variant?: 'left' | 'right' | 'screenshot' | 'error'
 }) => {
   // Purple theme for 'left' (Extraction), Blue/Cyan theme for 'right' (Analysis)
   const purple = "#9b6dff";
@@ -20,14 +21,42 @@ export const SpiderLoader = ({
   const lightCyan = "#bdeaff";
   const darkCyan = "#4a8bb3";
 
-  const mainColor = variant === 'left' ? purple : cyan;
-  const secondaryColor = variant === 'left' ? lightPurple : lightCyan;
-  const bodyColor = variant === 'left' ? darkPurple : darkCyan;
+  // Green theme for screenshot (rendering)
+  const green = "#34d399";
+  const lightGreen = "#6ee7b7";
+  const darkGreen = "#059669";
+
+  // Red theme for error
+  const red = "#f87171";
+  const lightRed = "#fca5a5";
+  const darkRed = "#dc2626";
+
+  const mainColor =
+    variant === 'left' ? purple
+    : variant === 'right' ? cyan
+    : variant === 'screenshot' ? green
+    : red;
+  const secondaryColor =
+    variant === 'left' ? lightPurple
+    : variant === 'right' ? lightCyan
+    : variant === 'screenshot' ? lightGreen
+    : lightRed;
+  const bodyColor =
+    variant === 'left' ? darkPurple
+    : variant === 'right' ? darkCyan
+    : variant === 'screenshot' ? darkGreen
+    : darkRed;
   const eyeColor = "#1a1a1a";
 
-  // Extraction animation (crawling/fetching)
-  const bounceY = variant === 'left' ? [0, -6, 0] : [0, -3, 0];
-  const scale = variant === 'right' ? [1, 1.05, 1] : [1, 1.02, 1]; // Right spider "thinks" (pulses more)
+  // Animation feel per variant
+  const bounceY =
+    variant === 'left' ? [0, -6, 0]
+    : variant === 'screenshot' ? [0, -2, 0]
+    : [0, -3, 0];
+  const scale =
+    variant === 'right' ? [1, 1.05, 1]
+    : variant === 'screenshot' ? [1, 1.08, 1]  // Camera shutter pulse feel
+    : [1, 1.02, 1];
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>

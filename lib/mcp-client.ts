@@ -68,6 +68,29 @@ export async function getMcpTools() {
             return { error: result.content };
           }
 
+          // Screenshot tool returns an array with an image content item.
+          // We extract the base64 data and return a structured object so
+          // the UI can render it as an <img> without parsing raw bytes.
+          if (mcpTool.name === "screenshot" && Array.isArray(result.content)) {
+            const imageItem = result.content.find(
+              (item: any) => item.type === "image" && item.data
+            );
+            if (imageItem) {
+              return {
+                screenshot: {
+                  data: imageItem.data,           // base64 string
+                  mimeType: imageItem.mimeType ?? "image/png",
+                  url: args.url,
+                },
+              };
+            }
+            // Fallback: screenshot returned text content (e.g. error message)
+            const textItem = result.content.find((item: any) => item.type === "text");
+            if (textItem) {
+              return { error: textItem.text };
+            }
+          }
+
           return result.content;
         } catch (error) {
           console.error(`Exception executing MCP tool ${mcpTool.name}:`, error);
