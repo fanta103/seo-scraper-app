@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 function AIChat({ seoReportId }: { seoReportId: string }) {
   const [input, setInput] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState<{ data: string; mimeType: string; url: string } | null>(null);
   const { messages, sendMessage, status } = useChat({
     id: seoReportId,
     transport: new DefaultChatTransport({
@@ -133,10 +134,12 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         const isLastAssistantMessage = message.role === "assistant" && idx === messages.length - 1;
                         const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
 
-                        // Phase detection
-                        const phase = (state === "call" || state === "input-streaming" || state === "input-available")
-                          ? "extraction"
-                          : (isCurrentlyStreaming ? "analysis" : "complete");
+                        // Phase detection: check if result is already available
+                        const phase = (state === "result" || toolInvocation.output || toolInvocation.result)
+                          ? "complete"
+                          : (state === "call" || state === "input-streaming" || state === "input-available")
+                            ? "extraction"
+                            : (isCurrentlyStreaming ? "analysis" : "complete");
 
                         return (
                           <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
@@ -293,14 +296,13 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         const isLastAssistantMessage = message.role === "assistant" && idx === messages.length - 1;
                         const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
 
-                        const screenshotPhase = (state === "call" || state === "input-streaming" || state === "input-available")
-                          ? "rendering"
-                          : (isCurrentlyStreaming ? "rendering" : "done");
-
-                        // Extract base64 image from tool result
                         const resultData = toolInvocation.output || toolInvocation.result;
                         const screenshotImg = resultData?.screenshot;
                         const screenshotError = resultData?.error;
+
+                        const screenshotPhase = (state === "result" || screenshotImg || screenshotError)
+                          ? "done"
+                          : "rendering";
 
                         return (
                           <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
@@ -397,12 +399,26 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                                       </div>
                                       {/* The screenshot image */}
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
-                                        alt={`Screenshot of ${url}`}
-                                        className="w-full h-auto object-top block"
-                                        style={{ maxHeight: "420px", objectFit: "cover" }}
-                                      />
+                                      <div
+                                        className="relative cursor-zoom-in group"
+                                        onClick={() => setFullScreenImage({
+                                          data: screenshotImg.data,
+                                          mimeType: screenshotImg.mimeType,
+                                          url: url
+                                        })}
+                                      >
+                                        <img
+                                          src={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
+                                          alt={`Screenshot of ${url}`}
+                                          className="w-full h-auto object-top block transition-transform duration-500 group-hover:scale-[1.02]"
+                                          style={{ maxHeight: "420px", objectFit: "cover" }}
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                          <div className="bg-white/90 dark:bg-gray-900/90 p-2 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                                            <Search className="w-5 h-5 text-indigo-600" />
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
                                   ) : null}
                                 </motion.div>
@@ -516,6 +532,64 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
         </div >
       )
       }
+
+      {/* Full Screen Image Modal */}
+      <AnimatePresence>
+        {fullScreenImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4 md:p-10"
+            onClick={() => setFullScreenImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative max-w-full max-h-full flex flex-col items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="absolute -top-12 left-0 right-0 flex items-center justify-between text-white px-2">
+                <div className="flex items-center gap-3">
+                  <Camera className="w-5 h-5 text-emerald-400" />
+                  <span className="text-sm font-medium truncate max-w-[200px] md:max-w-md">
+                    {fullScreenImage.url}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <a
+                    href={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
+                    download={`screenshot-${Date.now()}.png`}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden md:inline">Download</span>
+                  </a>
+                  <button
+                    onClick={() => setFullScreenImage(null)}
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* The full resolution image */}
+              <div className="overflow-auto custom-scrollbar rounded-xl shadow-2xl border border-white/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
+                  alt="Full screen screenshot"
+                  className="max-w-none block"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toggle Button */}
       <div className="fixed bottom-6 right-6 z-50">
