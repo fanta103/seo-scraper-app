@@ -134,12 +134,21 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         const isLastAssistantMessage = message.role === "assistant" && idx === messages.length - 1;
                         const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
 
-                        // Phase detection: check if result is already available
-                        const phase = (state === "result" || toolInvocation.output || toolInvocation.result)
-                          ? "complete"
-                          : (state === "call" || state === "input-streaming" || state === "input-available")
-                            ? "extraction"
-                            : (isCurrentlyStreaming ? "analysis" : "complete");
+                        // Phase detection
+                        const hasResult = state === "result" || toolInvocation.output || toolInvocation.result;
+                        let phase: "extraction" | "analysis" | "complete";
+                        
+                        if (state === "call" || state === "input-streaming" || state === "input-available") {
+                          phase = "extraction";
+                        } else if (hasResult) {
+                          if (isScreenshot) {
+                            phase = "complete";
+                          } else {
+                            phase = isCurrentlyStreaming ? "analysis" : "complete";
+                          }
+                        } else {
+                          phase = isCurrentlyStreaming ? "analysis" : "complete";
+                        }
 
                         return (
                           <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
