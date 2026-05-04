@@ -68,7 +68,7 @@ const captureScreenshotTool = aiTool({
           full_page: true,
           network_idle: true,
           image_type: "png",
-          wait: 1000,
+          wait: 5000,
         },
       });
 
@@ -217,6 +217,7 @@ After it returns, tell the user the screenshot is displayed below.`;
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
+      //google_search: google.tools.googleSearch({}),
       // Single tool for screenshots — session lifecycle handled inside execute()
       capture_screenshot: captureScreenshotTool,
       // MCP tools for SEO audits — hide raw session/screenshot primitives from the model

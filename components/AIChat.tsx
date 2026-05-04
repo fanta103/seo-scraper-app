@@ -137,7 +137,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         // Phase detection
                         const hasResult = state === "result" || toolInvocation.output || toolInvocation.result;
                         let phase: "extraction" | "analysis" | "complete";
-                        
+
                         if (state === "call" || state === "input-streaming" || state === "input-available") {
                           phase = "extraction";
                         } else if (hasResult) {
@@ -167,7 +167,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-indigo-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-700/30 shadow-sm">Crawlera Bot 🕸️</span>
+                                      <span className="text-[10px] font-bold text-indigo-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-700/30 shadow-sm">Crawlero Bot 🕸️</span>
                                       <span className="w-1 h-1 bg-indigo-300 dark:bg-indigo-700 rounded-full animate-pulse" />
                                       <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">Extraction Phase</span>
                                     </div>
@@ -199,7 +199,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                                 >
                                   <div className="flex flex-col flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-cyan-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-cyan-100/50 dark:border-indigo-700/30 shadow-sm">Crawlera Bot 🕸️</span>
+                                      <span className="text-[10px] font-bold text-cyan-500 bg-white/80 dark:bg-indigo-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-cyan-100/50 dark:border-indigo-700/30 shadow-sm">Crawlero Bot 🕸️</span>
                                       <span className="w-1 h-1 bg-cyan-300 dark:bg-cyan-700 rounded-full animate-pulse" />
                                       <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-widest">Analysis Phase</span>
                                     </div>
@@ -251,7 +251,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                                         (toolInvocation.output || toolInvocation.result)?.error
                                           ? "text-red-600 bg-white dark:bg-red-900/40 border-red-100 dark:border-red-800/30"
                                           : "text-emerald-600 bg-white dark:bg-emerald-900/40 border-emerald-100 dark:border-emerald-800/30"
-                                      )}>Crawlera Bot 🕸️</span>
+                                      )}>Crawlero Bot 🕸️</span>
                                       <span className={cn(
                                         "w-1 h-1 rounded-full",
                                         (toolInvocation.output || toolInvocation.result)?.error ? "bg-red-300 dark:bg-red-700" : "bg-emerald-300 dark:bg-emerald-700"
@@ -331,7 +331,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-emerald-600 bg-white/80 dark:bg-emerald-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-emerald-100/50 dark:border-emerald-700/30 shadow-sm">Crawlera Bot 📸</span>
+                                      <span className="text-[10px] font-bold text-emerald-600 bg-white/80 dark:bg-emerald-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-emerald-100/50 dark:border-emerald-700/30 shadow-sm">Crawlero Bot 📸</span>
                                       <span className="w-1 h-1 bg-emerald-300 dark:bg-emerald-700 rounded-full animate-pulse" />
                                       <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest">Rendering Page</span>
                                     </div>
