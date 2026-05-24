@@ -1,24 +1,41 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Globe, Zap } from "lucide-react";
 import remarkGfm from "remark-gfm";
 import { SpiderLoader } from "@/components/SpiderLoader";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useUser } from "@clerk/nextjs";
 
-function AIChat({ seoReportId }: { seoReportId: string }) {
+function AIChatInner({
+  seoReportId,
+  initialMessages,
+}: {
+  seoReportId: string;
+  initialMessages: UIMessage[];
+}) {
   const [input, setInput] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const { messages, sendMessage, status } = useChat({
     id: seoReportId,
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
-      body: { id: seoReportId },
+      prepareSendMessagesRequest({ messages, id }) {
+        return {
+          body: {
+            message: messages[messages.length - 1],
+            id,
+          },
+        };
+      },
     }),
   });
 
@@ -399,6 +416,22 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
         </Button>
       </div>
     </>
+  );
+}
+
+function AIChat({ seoReportId }: { seoReportId: string }) {
+  const { user } = useUser();
+  const savedMessages = useQuery(
+    api.reportChats.getMessages,
+    user?.id ? { snapshotId: seoReportId, userId: user.id } : "skip",
+  );
+
+  if (savedMessages === undefined) {
+    return null;
+  }
+
+  return (
+    <AIChatInner seoReportId={seoReportId} initialMessages={savedMessages} />
   );
 }
 

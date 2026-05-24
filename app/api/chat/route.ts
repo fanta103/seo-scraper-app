@@ -1,11 +1,18 @@
 import { google } from "@ai-sdk/google";
-import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
+import {
+  streamText,
+  UIMessage,
+  convertToModelMessages,
+  stepCountIs,
+  validateUIMessages,
+  createIdGenerator,
+  TypeValidationError,
+} from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { auth } from "@clerk/nextjs/server";
 import { getMcpTools } from "@/lib/mcp-client";
 
-// Allow streaming responses up to 30 seconds
 export const maxDuration = 300;
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -18,15 +25,25 @@ export async function POST(req: Request) {
   const { userId } = await auth();
 
   if (!userId) {
-    throw new Error("User ID is not set");
+    return new Response("Unauthorized", { status: 401 });
   }
-  const {
-    messages,
-    id,
-  }: {
-    messages: UIMessage[];
-    id: string;
-  } = await req.json();
+
+  const body = await req.json();
+  const snapshotId: string = body.id;
+
+  if (!snapshotId) {
+    return new Response("Report id is required", { status: 400 });
+  }
+
+  // Persistence: last message only (new) or full history (legacy fallback)
+  let incomingMessage: UIMessage | undefined = body.message;
+  if (!incomingMessage && Array.isArray(body.messages) && body.messages.length > 0) {
+    incomingMessage = body.messages[body.messages.length - 1] as UIMessage;
+  }
+
+  if (!incomingMessage) {
+    return new Response("Message is required", { status: 400 });
+  }
 
   let mcpTools = {};
   try {
@@ -35,22 +52,47 @@ export async function POST(req: Request) {
     console.error("Failed to load MCP tools:", error);
   }
 
-  // Step 1: Get the SEO report from the database
+  let previousMessages: UIMessage[] = [];
+  try {
+    previousMessages = await convex.query(api.reportChats.getMessages, {
+      snapshotId,
+      userId,
+    });
+  } catch (error) {
+    console.error("Failed to load chat messages:", error);
+  }
+
+  const allMessages: UIMessage[] = [...previousMessages, incomingMessage];
+
+  let validatedMessages: UIMessage[];
+  try {
+    validatedMessages = await validateUIMessages({
+      messages: allMessages,
+      tools: mcpTools,
+    });
+  } catch (error) {
+    if (error instanceof TypeValidationError) {
+      console.error("Chat message validation failed:", error);
+      validatedMessages = [incomingMessage];
+    } else {
+      throw error;
+    }
+  }
+
   let seoReportData = null;
 
   let systemPrompt = `You are an AI assistant helping users understand their SEO report.
   
   Provide helpful insights and answer questions about the SEO data and recommendations.`;
 
-  if (id) {
-    try {
-      const job = await convex.query(api.scrapingJobs.getJobBySnapshotId, {
-        snapshotId: id,
-        userId: userId,
-      });
-      if (job?.seoReport) {
-        seoReportData = job.seoReport;
-        systemPrompt = `You are an AI assistant helping users understand their SEO report.
+  try {
+    const job = await convex.query(api.scrapingJobs.getJobBySnapshotId, {
+      snapshotId,
+      userId,
+    });
+    if (job?.seoReport) {
+      seoReportData = job.seoReport;
+      systemPrompt = `You are an AI assistant helping users understand their SEO report.
       
       CURRENT SEO REPORT DATA:
 
@@ -67,18 +109,14 @@ Key areas you can help with:
 - Content gaps and optimization opportunities
 - Actionable recommendations for improvement
 
-Use your native google_search tool to answer questions about the SEO report if it will help you answer the question.
-IMPORTANT: Whenever you are about to search the web, you MUST start your response with exactly this token on its own line: [SEARCHING_WEB] - then proceed with the search and your answer. Do not skip this token when performing any web search.
 
 Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`;
-      } else {
-        systemPrompt += `\n\nNote: SEO report with ID "${id}" was found but analysis may still be in progress or failed. Please check the report status.`;
-      }
-
-    } catch (error) {
-      console.error("Error fetching SEO report:", error);
-      systemPrompt += `\n\nNote: Unable to fetch SEO report data for ID "${id}". The report may not exist or you may not have access to it.`;
+    } else {
+      systemPrompt += `\n\nNote: SEO report with ID "${snapshotId}" was found but analysis may still be in progress or failed. Please check the report status.`;
     }
+  } catch (error) {
+    console.error("Error fetching SEO report:", error);
+    systemPrompt += `\n\nNote: Unable to fetch SEO report data for ID "${snapshotId}". The report may not exist or you may not have access to it.`;
   }
 
   systemPrompt += `
@@ -101,14 +139,30 @@ Report your findings clearly and concisely.`;
 
   const result = streamText({
     model: google("gemini-2.5-flash"),
-    messages: await convertToModelMessages(messages),
+    messages: await convertToModelMessages(validatedMessages),
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-      //google_search: google.tools.googleSearch({}),
       ...mcpTools,
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  result.consumeStream();
+
+  return result.toUIMessageStreamResponse({
+    originalMessages: validatedMessages,
+    generateMessageId: createIdGenerator({ prefix: "msg", size: 16 }),
+    onFinish: async ({ messages, isAborted }) => {
+      if (isAborted) return;
+      try {
+        await convex.mutation(api.reportChats.saveMessages, {
+          snapshotId,
+          userId,
+          messages,
+        });
+      } catch (error) {
+        console.error("Failed to save chat messages:", error);
+      }
+    },
+  });
 }
