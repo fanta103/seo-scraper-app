@@ -12,6 +12,11 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { auth } from "@clerk/nextjs/server";
 import { getMcpTools } from "@/lib/mcp-client";
+import {
+  captureScreenshotTool,
+  filterMcpToolsForModel,
+  sanitizeMessagesForStorage,
+} from "@/lib/capture-screenshot";
 
 export const maxDuration = 300;
 
@@ -62,13 +67,21 @@ export async function POST(req: Request) {
     console.error("Failed to load chat messages:", error);
   }
 
-  const allMessages: UIMessage[] = [...previousMessages, incomingMessage];
+  const allMessages: UIMessage[] = [
+    ...sanitizeMessagesForStorage(previousMessages as UIMessage[]),
+    incomingMessage,
+  ];
+
+  const modelTools = {
+    capture_screenshot: captureScreenshotTool,
+    ...filterMcpToolsForModel(mcpTools),
+  };
 
   let validatedMessages: UIMessage[];
   try {
     validatedMessages = await validateUIMessages({
       messages: allMessages,
-      tools: mcpTools,
+      tools: modelTools,
     });
   } catch (error) {
     if (error instanceof TypeValidationError) {
@@ -135,16 +148,19 @@ When analyzing the fetched HTML for technical SEO, check for:
 - Headings: exactly one <h1>, properly nested <h2>s.
 - Image accessibility: missing alt attributes.
 - Structured data: <script type="application/ld+json">.
-Report your findings clearly and concisely.`;
+Report your findings clearly and concisely.
+
+SCREENSHOT TOOL:
+If the user asks to "show", "preview", "screenshot", or "take a photo" of a website, call the 'capture_screenshot' tool with just the URL.
+Do NOT call open_session, screenshot, or any session tools directly — capture_screenshot manages the browser session internally.
+After it returns, tell the user the screenshot is displayed below.`;
 
   const result = streamText({
     model: google("gemini-2.5-flash"),
     messages: await convertToModelMessages(validatedMessages),
     system: systemPrompt,
     stopWhen: stepCountIs(5),
-    tools: {
-      ...mcpTools,
-    },
+    tools: modelTools,
   });
 
   result.consumeStream();
@@ -158,7 +174,7 @@ Report your findings clearly and concisely.`;
         await convex.mutation(api.reportChats.saveMessages, {
           snapshotId,
           userId,
-          messages,
+          messages: sanitizeMessagesForStorage(messages),
         });
       } catch (error) {
         console.error("Failed to save chat messages:", error);
