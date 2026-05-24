@@ -14,6 +14,18 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 
+function messageHasVisibleContent(message: UIMessage): boolean {
+  return message.parts.some(
+    (part) =>
+      (part.type === "text" &&
+        part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0) ||
+      part.type === "tool-invocation" ||
+      part.type === "tool-call" ||
+      part.type === "tool-result" ||
+      (part.type as string).startsWith("tool-"),
+  );
+}
+
 function AIChatInner({
   seoReportId,
   initialMessages,
@@ -59,16 +71,26 @@ function AIChatInner({
   };
 
   const isLoading = status === "streaming" || status === "submitted";
-  const isTyping = status === "submitted";
 
-  // Detect [SEARCHING_WEB] token in the last assistant message
-  const lastAssistantMessage = messages[messages.length - 1]?.role === "assistant"
-    ? messages[messages.length - 1]
-    : null;
+  const lastMessage = messages[messages.length - 1];
+  const lastAssistantMessage =
+    lastMessage?.role === "assistant" ? lastMessage : null;
 
-  const isSearching = lastAssistantMessage?.parts.some(
-    (p) => p.type === "text" && p.text?.includes("[SEARCHING_WEB]") && p.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length === 0
-  ) ?? false;
+  const isSearching =
+    lastAssistantMessage?.parts.some(
+      (p) =>
+        p.type === "text" &&
+        p.text?.includes("[SEARCHING_WEB]") &&
+        p.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length === 0,
+    ) ?? false;
+
+  // Keep indicator visible through submitted + early streaming until text/tools appear
+  const showPendingIndicator =
+    isLoading &&
+    !isSearching &&
+    (!lastMessage ||
+      lastMessage.role === "user" ||
+      !messageHasVisibleContent(lastMessage));
 
   return (
     <>
@@ -108,15 +130,7 @@ function AIChatInner({
             )}
 
             {messages.map((message, idx) => {
-              const hasVisibleContent = message.parts.some(part =>
-                (part.type === "text" && part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0) ||
-                (part.type === "tool-invocation") ||
-                (part.type === "tool-call") ||
-                (part.type === "tool-result") ||
-                (part.type as string).startsWith("tool-")
-              );
-
-              if (!hasVisibleContent) return null;
+              if (!messageHasVisibleContent(message)) return null;
 
               return (
                 <div
@@ -365,13 +379,15 @@ function AIChatInner({
               </div>
             )}
 
-            {/* Typing indicator — shown while loading and NOT searching */}
-            {isTyping && !isSearching && (
+            {/* Pending indicator — until assistant text or tool UI is visible */}
+            {showPendingIndicator && (
               <div className="flex justify-start">
                 <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                  <div className="flex items-center gap-1">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">AI is Thinking...</span>
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      AI is thinking…
+                    </span>
                   </div>
                 </div>
               </div>
