@@ -3,11 +3,16 @@ import { z } from "zod";
 import { getMcpClient } from "@/lib/mcp-client";
 
 type ScreenshotOutput = {
-  screenshot?: { data?: string; mimeType?: string; url?: string };
+  screenshot?: { data?: string; mimeType?: string; url?: string; websiteUrl?: string };
   error?: string;
 };
 
-/** Strip base64 image payloads before persisting — keeps Convex docs under size limits. */
+// Global cache for screenshots so they survive hot reloads and can be fetched by the browser
+if (!(globalThis as any).__screenshotCache) {
+  (globalThis as any).__screenshotCache = new Map<string, { data: string; mimeType: string }>();
+}
+
+/** Strip temporary payloads before persisting — keeps Convex docs under size limits. */
 export function sanitizeMessagesForStorage(messages: UIMessage[]): UIMessage[] {
   return messages.map((message) => ({
     ...message,
@@ -16,16 +21,16 @@ export function sanitizeMessagesForStorage(messages: UIMessage[]): UIMessage[] {
       if (part.state !== "output-available" || !part.output) return part;
 
       const output = part.output as ScreenshotOutput;
-      if (!output.screenshot?.data) return part;
+      if (!output.screenshot?.url && !output.screenshot?.data) return part;
 
       return {
         ...part,
         output: {
           ...output,
           screenshot: {
-            url: output.screenshot.url,
+            url: output.screenshot.websiteUrl || output.screenshot.url, // save original url
             mimeType: output.screenshot.mimeType ?? "image/png",
-            // Omit `data` — full image only lives in the active client session.
+            // Omit data/temp urls for storage
           },
         },
       };
@@ -122,11 +127,24 @@ export const captureScreenshotTool = aiTool({
 
       if (imageItem) {
         console.log(`[capture_screenshot] Screenshot captured successfully.`);
+        
+        const id = Math.random().toString(36).substring(7);
+        const mimeType = (imageItem.mimeType ?? "image/png") as string;
+        
+        (globalThis as any).__screenshotCache.set(id, {
+          data: imageItem.data as string,
+          mimeType,
+        });
+
+        // Cleanup after 10 minutes to free memory
+        setTimeout(() => (globalThis as any).__screenshotCache.delete(id), 10 * 60 * 1000);
+
         return {
           screenshot: {
-            data: imageItem.data as string,
-            mimeType: (imageItem.mimeType ?? "image/png") as string,
-            url,
+            url: `/api/screenshot?id=${id}`,
+            websiteUrl: url,
+            mimeType,
+            // INTENTIONALLY OMIT DATA: Prevents 5MB base64 from choking the LLM stream!
           },
         };
       }

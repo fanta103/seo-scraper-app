@@ -47,9 +47,10 @@ function AIChatInner({
   const [input, setInput] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState<{
-    data: string;
-    mimeType: string;
-    url: string;
+    data?: string;
+    mimeType?: string;
+    url?: string;
+    websiteUrl: string;
   } | null>(null);
   const { messages, sendMessage, status, error } = useChat({
     id: seoReportId,
@@ -366,13 +367,14 @@ function AIChatInner({
                             : part.type === "tool-result"
                               ? "result"
                               : undefined);
+                        const resultData =
+                          toolInvocation.output ?? toolInvocation.result;
+
                         const url =
                           toolInvocation.input?.url ??
                           toolInvocation.args?.url ??
+                          resultData?.screenshot?.websiteUrl ??
                           "the page";
-
-                        const resultData =
-                          toolInvocation.output ?? toolInvocation.result;
                         const screenshotImg = resultData?.screenshot;
                         const screenshotError =
                           resultData?.error ?? toolInvocation.errorText;
@@ -382,6 +384,7 @@ function AIChatInner({
                           state === "output-error" ||
                           state === "result" ||
                           screenshotImg?.data ||
+                          screenshotImg?.url ||
                           screenshotError
                             ? "done"
                             : "rendering";
@@ -456,7 +459,7 @@ function AIChatInner({
                                         </div>
                                       </div>
                                     </div>
-                                  ) : screenshotImg && !screenshotImg.data ? (
+                                  ) : screenshotImg && !screenshotImg.data && !screenshotImg.url?.startsWith("/api/") ? (
                                     <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm text-gray-600 dark:text-gray-400">
                                       <Camera className="w-4 h-4 shrink-0" />
                                       Screenshot of{" "}
@@ -464,7 +467,7 @@ function AIChatInner({
                                       longer in this session. Ask again to
                                       capture a fresh preview.
                                     </div>
-                                  ) : screenshotImg?.data ? (
+                                  ) : screenshotImg?.data || screenshotImg?.url ? (
                                     <div className="rounded-[1.5rem] overflow-hidden border border-emerald-100 dark:border-emerald-800/40 shadow-lg bg-white dark:bg-gray-900">
                                       <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
                                         <div className="flex items-center gap-2">
@@ -475,7 +478,7 @@ function AIChatInner({
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                           <a
-                                            href={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
+                                            href={screenshotImg.data ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}` : screenshotImg.url}
                                             download={`screenshot-${Date.now()}.png`}
                                             className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
                                             title="Download screenshot"
@@ -499,13 +502,14 @@ function AIChatInner({
                                           setFullScreenImage({
                                             data: screenshotImg.data,
                                             mimeType: screenshotImg.mimeType,
-                                            url,
+                                            url: screenshotImg.url,
+                                            websiteUrl: url,
                                           })
                                         }
                                       >
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
-                                          src={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
+                                          src={screenshotImg.data ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}` : screenshotImg.url}
                                           alt={`Screenshot of ${url}`}
                                           className="w-full h-auto object-top block transition-transform duration-500 group-hover:scale-[1.02]"
                                           style={{
@@ -660,12 +664,12 @@ function AIChatInner({
                 <div className="flex items-center gap-3">
                   <Camera className="w-5 h-5 text-emerald-400" />
                   <span className="text-sm font-medium truncate max-w-[200px] md:max-w-md">
-                    {fullScreenImage.url}
+                    {fullScreenImage.websiteUrl}
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
                   <a
-                    href={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
+                    href={fullScreenImage.data ? `data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}` : (fullScreenImage.url || "")}
                     download={`screenshot-${Date.now()}.png`}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-sm"
                   >
@@ -684,7 +688,7 @@ function AIChatInner({
               <div className="overflow-auto custom-scrollbar rounded-xl shadow-2xl border border-white/10">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
+                  src={fullScreenImage.data ? `data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}` : (fullScreenImage.url || "")}
                   alt="Full screen screenshot"
                   className="max-w-none block"
                 />

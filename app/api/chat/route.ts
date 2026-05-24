@@ -77,19 +77,27 @@ export async function POST(req: Request) {
     ...filterMcpToolsForModel(mcpTools),
   };
 
+  const validToolNames = new Set(Object.keys(modelTools));
+  const preValidatedMessages = allMessages.map(msg => ({
+    ...msg,
+    parts: msg.parts ? msg.parts.filter((part: any) => {
+      if (part.type === 'tool-call' || part.type === 'tool-invocation' || part.type === 'tool-result') {
+        return validToolNames.has(part.toolName);
+      }
+      return true;
+    }) : []
+  })).filter(msg => msg.parts.length > 0);
+
   let validatedMessages: UIMessage[];
   try {
     validatedMessages = await validateUIMessages({
-      messages: allMessages,
+      messages: preValidatedMessages,
       tools: modelTools,
     });
   } catch (error) {
-    if (error instanceof TypeValidationError) {
-      console.error("Chat message validation failed:", error);
-      validatedMessages = [incomingMessage];
-    } else {
-      throw error;
-    }
+    console.error("Chat message validation failed:", error);
+    // Fallback safely so the chat doesn't break
+    validatedMessages = [incomingMessage];
   }
 
   let seoReportData = null;
@@ -122,8 +130,11 @@ Key areas you can help with:
 - Content gaps and optimization opportunities
 - Actionable recommendations for improvement
 
+Use your native google_search tool to answer questions about the SEO report if it will help you answer the question.
+IMPORTANT: Whenever you are about to search the web, you MUST start your response with exactly this token on its own line: [SEARCHING_WEB] - then proceed with the search and your answer. Do not skip this token when performing any web search.
 
-Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`;
+Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`
+
     } else {
       systemPrompt += `\n\nNote: SEO report with ID "${snapshotId}" was found but analysis may still be in progress or failed. Please check the report status.`;
     }
@@ -160,8 +171,12 @@ After it returns, tell the user the screenshot is displayed below.`;
     messages: await convertToModelMessages(validatedMessages),
     system: systemPrompt,
     stopWhen: stepCountIs(5),
-    tools: modelTools,
+    tools: {
+      google_search: google.tools.googleSearch({}),
+      //...modelTools,
+    },
   });
+
 
   result.consumeStream();
 
