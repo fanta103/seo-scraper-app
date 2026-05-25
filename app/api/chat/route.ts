@@ -152,7 +152,7 @@ Provide specific, data-driven insights based on the actual report data. When ref
 TECHNICAL SEO / GEO AUDIT TOOL:
 If the user asks for a technical SEO audit, GEO technical audit, or HTML SEO review of a URL, call 'audit_technical_seo' with the full URL.
 This tool fetches refined HTML via stealthy_fetch, runs structured HTML checks (metadata, headings, canonical/noindex, JSON-LD, GEO/SSR content, mobile viewport, images, performance hints), and displays a scored audit card.
-After it returns, write a short friendly summary referencing the card scores — do NOT repeat the full checklist in prose.
+After it returns, write a short friendly summary (3–5 sentences max). Reference each category by name and its 0–100 score only (e.g. "Metadata: 85/100") — never use internal point weights like "/15". Do NOT repeat the full checklist or duplicate issues already shown in the card.
 Do NOT call stealthy_fetch separately for technical SEO audits unless the user only wants raw HTML.
 
 The MCP server refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before analysis.

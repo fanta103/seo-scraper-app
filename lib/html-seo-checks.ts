@@ -84,6 +84,9 @@ function analyzeMetadata(html: string, pageUrl: string): TechnicalSeoCategory {
   const ogTitle =
     firstMatch(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["'][^>]*>/i) ??
     firstMatch(html, /<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["'][^>]*>/i);
+  const twitterTitle =
+    firstMatch(html, /<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']*)["'][^>]*>/i) ??
+    firstMatch(html, /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']twitter:title["'][^>]*>/i);
   const htmlLang = firstMatch(html, /<html[^>]+lang=["']([^"']+)["']/i);
 
   checks.push({
@@ -94,26 +97,31 @@ function analyzeMetadata(html: string, pageUrl: string): TechnicalSeoCategory {
       : "Missing <title> — critical for SEO and AI snippets.",
   });
 
+  const descLen = description?.length ?? 0;
   checks.push({
     name: "Meta description",
     status:
-      description && description.length >= 50 && description.length <= 160
+      description && descLen >= 50 && descLen <= 160
         ? "pass"
         : description
           ? "warn"
           : "fail",
     detail: description
-      ? `${description.length} characters`
+      ? descLen > 160
+        ? `${descLen} characters (over 160 — may truncate in SERPs)`
+        : descLen < 50
+          ? `${descLen} characters (under 50 — too short)`
+          : `${descLen} characters`
       : "Missing meta description — hurts CTR and AI summarization.",
   });
 
   const robotsLower = (robots ?? "").toLowerCase();
   checks.push({
     name: "Robots meta",
-    status: robotsLower.includes("noindex") ? "fail" : robots ? "pass" : "warn",
+    status: robotsLower.includes("noindex") ? "fail" : "pass",
     detail: robots
       ? `content="${robots}"`
-      : "No robots meta (usually fine unless you need noindex on this page).",
+      : "No robots meta tag (default is index,follow — OK for most pages).",
   });
 
   checks.push({
@@ -122,10 +130,15 @@ function analyzeMetadata(html: string, pageUrl: string): TechnicalSeoCategory {
     detail: htmlLang ? `lang="${htmlLang}"` : "Missing lang on <html> for language targeting.",
   });
 
+  const socialTitle = ogTitle || twitterTitle;
   checks.push({
-    name: "Open Graph title",
-    status: ogTitle ? "pass" : "warn",
-    detail: ogTitle ? "og:title present" : "No og:title — weaker social and AI preview signals.",
+    name: "Social preview title",
+    status: socialTitle ? "pass" : "warn",
+    detail: socialTitle
+      ? ogTitle
+        ? "og:title present"
+        : "twitter:title present (no og:title)"
+      : "No og:title or twitter:title — add for richer social and AI link previews.",
   });
 
   void pageUrl;
@@ -443,60 +456,119 @@ function analyzePerformanceHints(html: string): TechnicalSeoCategory {
 
   checks.push({
     name: "Resource preload hints",
-    status: preloads > 0 ? "pass" : "warn",
+    status: preloads > 0 ? "pass" : "pass",
     detail:
       preloads > 0
         ? `${preloads} preload link(s) in HTML.`
-        : "No preload hints — consider preloading LCP image or critical assets.",
+        : "No preload hints in HTML (optional; helps LCP on image-heavy heroes).",
   });
 
   return buildCategory("performance_hints", "Performance hints", 10, checks);
+}
+
+const ACTIONABLE_WARN_CHECKS = new Set([
+  "Document title",
+  "Meta description",
+  "Social preview title",
+  "Image alt coverage",
+]);
+
+function shouldSurfaceIssue(check: TechnicalSeoCheck): boolean {
+  if (check.status === "fail") return true;
+  if (check.status === "warn") return ACTIONABLE_WARN_CHECKS.has(check.name);
+  return false;
 }
 
 function checksToIssues(categories: TechnicalSeoCategory[]): TechnicalSeoIssue[] {
   const issues: TechnicalSeoIssue[] = [];
   for (const cat of categories) {
     for (const check of cat.checks) {
-      if (check.status === "pass") continue;
+      if (!shouldSurfaceIssue(check)) continue;
+      const recommendation = recommendationForCheck(
+        cat.id,
+        check.name,
+        check.detail,
+        check.status,
+      );
+      if (!recommendation) continue;
+
       issues.push({
         severity:
           check.status === "fail" &&
-          (cat.id === "geo_ssr" || cat.id === "metadata" || cat.id === "indexability")
+          (cat.id === "geo_ssr" || cat.id === "indexability")
             ? "critical"
             : check.status === "fail"
               ? "major"
               : "minor",
         area: cat.label,
         finding: `${check.name}: ${check.detail}`,
-        recommendation: recommendationForCheck(cat.id, check.name),
+        recommendation,
       });
     }
   }
-  return issues.slice(0, 12);
+  return issues
+    .sort(
+      (a, b) =>
+        severityRank(b.severity) - severityRank(a.severity),
+    )
+    .slice(0, 8);
+}
+
+function severityRank(severity: string): number {
+  if (severity === "critical") return 3;
+  if (severity === "major") return 2;
+  return 1;
 }
 
 function recommendationForCheck(
   categoryId: TechnicalSeoCategory["id"],
   checkName: string,
+  detail: string,
+  status: TechnicalSeoCheck["status"],
 ): string {
+  if (checkName === "Meta description") {
+    if (detail.includes("over 160")) {
+      const m = detail.match(/(\d+)/);
+      const len = m?.[1] ?? "165";
+      return `Trim the meta description to ≤160 characters (currently ${len}).`;
+    }
+    if (detail.includes("under 50")) {
+      return "Expand the meta description to at least 50 characters with a clear page summary.";
+    }
+    return "Add a unique 50–160 character meta description.";
+  }
+
+  if (checkName === "Robots meta" && detail.includes("noindex")) {
+    return "Remove noindex on this page if it should appear in search and AI answers.";
+  }
+
   const map: Record<string, string> = {
-    "Document title": "Add a unique 10–70 character title with primary keyword.",
-    "Meta description": "Write a 50–160 character description that summarizes the page.",
-    "Robots meta": "Remove noindex unless this page should stay out of search and AI indexes.",
+    "Document title":
+      status === "fail"
+        ? "Add a <title> tag (10–70 characters) with the primary topic and brand."
+        : "Adjust the title to 10–70 characters for SERP display.",
+    "Social preview title":
+      'Add <meta property="og:title" content="..."> (and og:description) for social and AI link previews.',
     "Single H1": "Use one descriptive H1; demote extras to H2.",
-    "Canonical URL": "Add <link rel=\"canonical\" href=\"...\"> to the preferred URL.",
-    "JSON-LD present": "Add WebPage/Organization/Article JSON-LD in the HTML.",
-    "Main content in HTML": "Server-render key copy (Next.js SSR, Nuxt, etc.) — AI crawlers do not run JS.",
-    "Internal links in HTML": "Include crawlable <a href> links to important pages in the HTML.",
-    "Viewport meta": "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">.",
-    "Image alt coverage": "Add meaningful alt text to every content image.",
-    "Image dimensions": "Set width and height on images to prevent layout shift.",
+    "Canonical URL": 'Add <link rel="canonical" href="..."> pointing to the preferred URL.',
+    "JSON-LD present":
+      "Add JSON-LD (WebPage, Organization, or Product) in a <script type=\"application/ld+json\"> block.",
+    "Main content in HTML":
+      "Server-render key copy (Next.js SSR, Nuxt, etc.) — AI crawlers do not execute JavaScript.",
+    "Internal links in HTML":
+      "Include crawlable <a href> links to important pages in the initial HTML.",
+    "Viewport meta":
+      'Add <meta name="viewport" content="width=device-width, initial-scale=1">.',
+    "Image alt coverage":
+      "Add descriptive alt text for content images (use alt=\"\" only if purely decorative).",
+    "Image dimensions":
+      "Add width and height attributes on <img> tags (or CSS aspect-ratio) to reduce CLS.",
   };
   if (map[checkName]) return map[checkName];
   if (categoryId === "geo_ssr") {
     return "Ensure titles, body copy, links, and JSON-LD are in the initial HTML response.";
   }
-  return "Fix this HTML signal to improve technical SEO and GEO citability.";
+  return "";
 }
 
 function buildSummary(score: number): string {
@@ -536,22 +608,34 @@ export function analyzeHtmlForTechnicalSeo(
     .flatMap((c) =>
       c.checks
         .filter((ch) => ch.status === "pass")
-        .slice(0, 1)
-        .map((ch) => `${c.label}: ${ch.name}`),
+        .filter((ch) =>
+          [
+            "Canonical URL",
+            "JSON-LD present",
+            "Main content in HTML",
+            "Single H1",
+            "Noindex directive",
+          ].includes(ch.name),
+        )
+        .map((ch) => `${ch.name} — ${ch.detail}`),
     )
-    .slice(0, 6);
+    .slice(0, 5);
 
   const geoHighlights = categories
     .find((c) => c.id === "geo_ssr")
     ?.checks.map((c) => `${c.name} — ${c.detail}`)
     .slice(0, 4) ?? ["GEO / SSR checks unavailable."];
 
-  const quickWins = issues
-    .filter((i) => i.severity !== "critical")
-    .slice(0, 4)
-    .map((i) => i.recommendation);
-  while (quickWins.length < 2) {
-    quickWins.push("Re-fetch after fixes to validate HTML signals.");
+  const quickWins = [
+    ...new Set(
+      issues
+        .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+        .map((i) => i.recommendation)
+        .filter(Boolean),
+    ),
+  ].slice(0, 4);
+  if (quickWins.length === 0) {
+    quickWins.push("Re-run the audit after publishing HTML fixes.");
   }
 
   return {

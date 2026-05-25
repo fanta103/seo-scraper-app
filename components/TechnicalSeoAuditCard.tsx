@@ -238,16 +238,22 @@ export function TechnicalSeoAuditCard({
                   </div>
                 </div>
 
-                {audit.categories?.some((c) => c.checks?.length) && (
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                      HTML checks
-                    </div>
-                    <ul className="space-y-1.5 max-h-48 overflow-y-auto">
-                      {audit.categories.flatMap((cat) =>
-                        (cat.checks ?? []).map((check, j) => (
+                {(() => {
+                  const actionableChecks = audit.categories?.flatMap((cat) =>
+                    (cat.checks ?? [])
+                      .filter((c) => c.status !== "pass")
+                      .map((check) => ({ ...check, categoryLabel: cat.label })),
+                  );
+                  if (!actionableChecks?.length) return null;
+                  return (
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                        Needs attention
+                      </div>
+                      <ul className="space-y-1.5">
+                        {actionableChecks.map((check, j) => (
                           <li
-                            key={`${cat.id}-${j}`}
+                            key={`${check.name}-${j}`}
                             className="flex items-start gap-2 text-xs"
                           >
                             <span
@@ -259,6 +265,9 @@ export function TechnicalSeoAuditCard({
                               {check.status}
                             </span>
                             <span className="text-gray-600 dark:text-gray-400 min-w-0">
+                              <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                {check.categoryLabel} ·{" "}
+                              </span>
                               <span className="font-semibold text-gray-700 dark:text-gray-300">
                                 {check.name}
                               </span>
@@ -266,11 +275,11 @@ export function TechnicalSeoAuditCard({
                               {check.detail}
                             </span>
                           </li>
-                        )),
-                      )}
-                    </ul>
-                  </div>
-                )}
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
 
                 {audit.strengths && audit.strengths.length > 0 && (
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">

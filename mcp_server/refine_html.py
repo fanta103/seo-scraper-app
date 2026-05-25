@@ -29,8 +29,7 @@ _NOISE_TAGS = frozenset(
         "iframe",
         "embed",
         "object",
-        "picture",
-        "source",
+        # Keep <picture> / <source> — dropping <picture> removes nested <img> from audits.
     }
 )
 
