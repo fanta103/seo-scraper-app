@@ -18,6 +18,7 @@ import {
   sanitizeMessagesForStorage,
 } from "@/lib/capture-screenshot";
 import { auditUiUxTool } from "@/lib/ui-ux-audit";
+import { auditTechnicalSeoTool } from "@/lib/technical-seo-audit";
 
 export const maxDuration = 300;
 
@@ -76,6 +77,7 @@ export async function POST(req: Request) {
   const modelTools = {
     capture_screenshot: captureScreenshotTool,
     audit_ui_ux: auditUiUxTool,
+    audit_technical_seo: auditTechnicalSeoTool,
     ...filterMcpToolsForModel(mcpTools),
   };
 
@@ -147,23 +149,14 @@ Provide specific, data-driven insights based on the actual report data. When ref
 
   systemPrompt += `
 
-You are equipped with the Scrapling MCP Server which provides web scraping tools for Technical SEO audits.
-If the user asks for a technical SEO audit, you MUST use the 'stealthy_fetch' tool.
-TOOL PARAMETERS FOR 'stealthy_fetch':
-- url: The full URL to audit (compulsory)
-- main_content_only: false (compulsory for SEO audits)
-- extraction_type: "html" (compulsory for SEO audits)
-Do NOT invent or guess other parameters.
+TECHNICAL SEO / GEO AUDIT TOOL:
+If the user asks for a technical SEO audit, GEO technical audit, or HTML SEO review of a URL, call 'audit_technical_seo' with the full URL.
+This tool fetches refined HTML via stealthy_fetch, runs structured HTML checks (metadata, headings, canonical/noindex, JSON-LD, GEO/SSR content, mobile viewport, images, performance hints), and displays a scored audit card.
+After it returns, write a short friendly summary referencing the card scores — do NOT repeat the full checklist in prose.
+Do NOT call stealthy_fetch separately for technical SEO audits unless the user only wants raw HTML.
 
-The MCP server automatically refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before you receive it.
-
-When analyzing the fetched HTML for technical SEO, check for:
-- Meta tags: <title>, <meta name="description">, and <meta name="robots">.
-- Canonical link: <link rel="canonical" href="...">
-- Headings: exactly one <h1>, properly nested <h2>s.
-- Image accessibility: missing alt attributes.
-- Structured data: <script type="application/ld+json">.
-Report your findings clearly and concisely.
+The MCP server refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before analysis.
+HTML audits cannot verify robots.txt, AI crawler access, HTTP headers, Core Web Vitals, or TTFB — mention that when relevant.
 
 SCREENSHOT TOOL:
 If the user asks to "show", "preview", "screenshot", or "take a photo" of a website, call the 'capture_screenshot' tool with just the URL.

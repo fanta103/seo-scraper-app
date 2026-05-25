@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import remarkGfm from "remark-gfm";
 import { SpiderLoader } from "@/components/SpiderLoader";
+import { TechnicalSeoAuditCard } from "@/components/TechnicalSeoAuditCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -192,6 +193,12 @@ function AIChatInner({
                           (partAny.toolInvocation?.toolName === "audit_ui_ux" ||
                             partAny.toolName === "audit_ui_ux")) ||
                         part.type === "tool-audit_ui_ux";
+                      const isTechnicalSeoAudit =
+                        (isToolCall &&
+                          (partAny.toolInvocation?.toolName ===
+                            "audit_technical_seo" ||
+                            partAny.toolName === "audit_technical_seo")) ||
+                        part.type === "tool-audit_technical_seo";
 
                       if (isStealthyFetch) {
                         const toolInvocation = partAny.toolInvocation || partAny;
@@ -362,6 +369,45 @@ function AIChatInner({
                               )}
                             </AnimatePresence>
                           </div>
+                        );
+                      }
+
+                      if (isTechnicalSeoAudit) {
+                        const toolInvocation = partAny.toolInvocation || partAny;
+                        const state =
+                          partAny.state ||
+                          toolInvocation.state ||
+                          (part.type === "tool-call"
+                            ? "call"
+                            : part.type === "tool-result"
+                              ? "result"
+                              : undefined);
+                        const resultData =
+                          toolInvocation.output ?? toolInvocation.result;
+                        const url =
+                          toolInvocation.input?.url ??
+                          toolInvocation.args?.url ??
+                          resultData?.audit?.websiteUrl ??
+                          "the page";
+                        const audit = resultData?.audit;
+                        const auditError =
+                          resultData?.error ?? toolInvocation.errorText;
+                        const isDone =
+                          state === "output-available" ||
+                          state === "output-error" ||
+                          state === "result" ||
+                          audit ||
+                          auditError;
+
+                        return (
+                          <TechnicalSeoAuditCard
+                            key={`${message.id}-${i}`}
+                            url={String(url)}
+                            audit={audit}
+                            auditError={auditError}
+                            isDone={!!isDone}
+                            fetchMeta={resultData?.fetch}
+                          />
                         );
                       }
 

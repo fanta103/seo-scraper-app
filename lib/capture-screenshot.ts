@@ -41,7 +41,11 @@ export type CaptureScreenshotOptions = {
 
 /** Strip temporary payloads before persisting — keeps Convex docs under size limits. */
 export function sanitizeMessagesForStorage(messages: UIMessage[]): UIMessage[] {
-  const toolTypes = ["tool-capture_screenshot", "tool-audit_ui_ux"] as const;
+  const toolTypes = [
+    "tool-capture_screenshot",
+    "tool-audit_ui_ux",
+    "tool-audit_technical_seo",
+  ] as const;
 
   return messages.map((message) => ({
     ...message,
