@@ -50,7 +50,7 @@ async function runVisionAudit(
 
 export const auditUiUxTool = aiTool({
   description:
-    "Capture a viewport screenshot of a website and perform a structured UI/UX audit. " +
+    "Capture a full-page screenshot of a website and perform a structured UI/UX audit. " +
     "Use when the user asks for a UI audit, UX review, design feedback, or usability analysis of a URL. " +
     "Returns scores, issues, and recommendations — not raw image data.",
   inputSchema: auditInputSchema,
@@ -64,8 +64,11 @@ export const auditUiUxTool = aiTool({
       };
     }
 
-    console.log(`[audit_ui_ux] Capturing viewport for: ${url}`);
-    const capture = await captureScreenshotInternal(url, { fullPage: false });
+    console.log(`[audit_ui_ux] Capturing full page for: ${url}`);
+    const capture = await captureScreenshotInternal(url, {
+      fullPage: true,
+      desktopViewport: true,
+    });
 
     if ("error" in capture) {
       return { error: capture.error };
@@ -97,6 +100,8 @@ export const auditUiUxTool = aiTool({
           url: apiUrl,
           websiteUrl,
           mimeType,
+          fullPage: true,
+          viewportWidth: capture.screenshot.viewportWidth,
         },
         audit,
       };

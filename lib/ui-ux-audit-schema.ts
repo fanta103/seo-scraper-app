@@ -34,9 +34,10 @@ export const uiUxAuditSchema = z.object({
 
 export type UiUxAudit = z.infer<typeof uiUxAuditSchema>;
 
-export const UI_UX_AUDIT_VISION_PROMPT = `You are a senior UI/UX designer auditing a website from a single viewport screenshot.
+export const UI_UX_AUDIT_VISION_PROMPT = `You are a senior UI/UX designer auditing a website from a single full-page screenshot.
 
-Analyze ONLY what is visible in the image. Do not invent elements that are not shown.
+Analyze ONLY what is visible in the image (one tall full-page capture at 1440px width, entire scrollable page). Do not invent elements that are not shown.
+The image includes the header through the footer — review the whole page flow, not only the hero.
 
 Evaluate:
 - Visual hierarchy and layout (spacing, alignment, grid)

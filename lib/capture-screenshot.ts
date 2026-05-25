@@ -20,9 +20,24 @@ export type CaptureScreenshotResult =
         websiteUrl: string;
         mimeType: string;
         screenshotId: string;
+        viewportWidth?: number;
+        viewportHeight?: number;
       };
     }
   | { error: string };
+
+/** Standard desktop viewport — full visible area, not full-page scroll. */
+export const DESKTOP_VIEWPORT = { width: 1440, height: 900 } as const;
+
+export type CaptureScreenshotOptions = {
+  /** When false (default), captures only the visible viewport. */
+  fullPage?: boolean;
+  /**
+   * Opens a stealthy session with an explicit Playwright viewport so the
+   * screenshot matches a full desktop above-the-fold view (used for UI/UX audit).
+   */
+  desktopViewport?: boolean;
+};
 
 /** Strip temporary payloads before persisting — keeps Convex docs under size limits. */
 export function sanitizeMessagesForStorage(messages: UIMessage[]): UIMessage[] {
@@ -58,9 +73,11 @@ export function sanitizeMessagesForStorage(messages: UIMessage[]): UIMessage[] {
  */
 export async function captureScreenshotInternal(
   url: string,
-  options?: { fullPage?: boolean },
+  options?: CaptureScreenshotOptions,
 ): Promise<CaptureScreenshotResult> {
   const fullPage = options?.fullPage ?? false;
+  const desktopViewport = options?.desktopViewport ?? false;
+  const viewport = DESKTOP_VIEWPORT;
 
   if (!url || !/^https?:\/\//i.test(url)) {
     return {
@@ -82,7 +99,12 @@ export async function captureScreenshotInternal(
       }
     ).callTool({
       name: "open_session",
-      arguments: { session_type: "dynamic" },
+      arguments: desktopViewport
+        ? {
+            session_type: "stealthy",
+            additional_args: { viewport },
+          }
+        : { session_type: "dynamic" },
     });
 
     const sessionTextItem = Array.isArray(sessionResult.content)
@@ -161,6 +183,12 @@ export async function captureScreenshotInternal(
         websiteUrl: url,
         mimeType,
         screenshotId: id,
+        ...(desktopViewport
+          ? {
+              viewportWidth: viewport.width,
+              viewportHeight: viewport.height,
+            }
+          : {}),
       },
     };
   } catch (err: unknown) {

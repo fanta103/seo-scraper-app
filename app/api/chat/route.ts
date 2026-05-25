@@ -155,6 +155,8 @@ TOOL PARAMETERS FOR 'stealthy_fetch':
 - extraction_type: "html" (compulsory for SEO audits)
 Do NOT invent or guess other parameters.
 
+The MCP server automatically refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before you receive it.
+
 When analyzing the fetched HTML for technical SEO, check for:
 - Meta tags: <title>, <meta name="description">, and <meta name="robots">.
 - Canonical link: <link rel="canonical" href="...">
@@ -170,7 +172,7 @@ After it returns, tell the user the screenshot is displayed below.
 
 UI/UX AUDIT TOOL:
 If the user asks for a UI audit, UX review, design feedback, usability analysis, or "audit the design" of a website, call 'audit_ui_ux' with the full URL.
-This tool captures a viewport screenshot and returns structured scores and recommendations — use those results to write a clear, friendly summary.
+This tool captures a full-page screenshot (entire scrollable page) and returns structured scores and recommendations — use those results to write a clear, friendly summary.
 Do NOT call capture_screenshot separately before audit_ui_ux; the audit tool already captures the page.
 After it returns, summarize the audit highlights and mention that the screenshot and detailed scores are shown below.`;
 

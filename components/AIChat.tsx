@@ -458,27 +458,91 @@ function AIChatInner({
                                     </div>
                                   )}
 
-                                  {screenshotImg?.data || screenshotImg?.url?.startsWith("/api/") ? (
+                                  {screenshotImg && !screenshotImg.data && !screenshotImg.url?.startsWith("/api/") ? (
+                                    <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm text-gray-600 dark:text-gray-400">
+                                      <Camera className="w-4 h-4 shrink-0" />
+                                      Screenshot of{" "}
+                                      {String(url).replace(/^https?:\/\//, "")} is no
+                                      longer in this session. Ask again to capture a
+                                      fresh preview.
+                                    </div>
+                                  ) : screenshotImg?.data || screenshotImg?.url ? (
                                     <div className="rounded-[1.5rem] overflow-hidden border border-violet-100 dark:border-violet-800/40 shadow-lg bg-white dark:bg-gray-900">
                                       <div className="flex items-center justify-between px-4 py-2.5 bg-violet-50 dark:bg-violet-900/20 border-b border-violet-100 dark:border-violet-800/30">
-                                        <div className="flex items-center gap-2">
-                                          <Layout className="w-3.5 h-3.5 text-violet-600" />
-                                          <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 truncate max-w-[220px]">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Layout className="w-3.5 h-3.5 text-violet-600 shrink-0" />
+                                          <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 truncate max-w-[180px]">
                                             {String(url).replace(/^https?:\/\//, "")}
                                           </span>
+                                          {screenshotImg.fullPage ? (
+                                            <span className="text-[9px] text-violet-500/80 font-medium shrink-0">
+                                              Full page{screenshotImg.viewportWidth ? ` · ${screenshotImg.viewportWidth}px wide` : ""}
+                                            </span>
+                                          ) : screenshotImg.viewportWidth && screenshotImg.viewportHeight ? (
+                                            <span className="text-[9px] text-violet-500/80 font-medium shrink-0">
+                                              {screenshotImg.viewportWidth}×{screenshotImg.viewportHeight}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <a
+                                            href={
+                                              screenshotImg.data
+                                                ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}`
+                                                : screenshotImg.url
+                                            }
+                                            download={`screenshot-${Date.now()}.png`}
+                                            className="p-1.5 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-800/40 transition-colors"
+                                            title="Download screenshot"
+                                          >
+                                            <Download className="w-3.5 h-3.5 text-violet-600" />
+                                          </a>
+                                          <a
+                                            href={String(url)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-1.5 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-800/40 transition-colors"
+                                            title="Open page"
+                                          >
+                                            <ExternalLink className="w-3.5 h-3.5 text-violet-600" />
+                                          </a>
                                         </div>
                                       </div>
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={
-                                          screenshotImg.data
-                                            ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}`
-                                            : screenshotImg.url
+                                      <div
+                                        className="relative cursor-zoom-in group"
+                                        onClick={() =>
+                                          setFullScreenImage({
+                                            data: screenshotImg.data,
+                                            mimeType: screenshotImg.mimeType,
+                                            url: screenshotImg.url,
+                                            websiteUrl: String(url),
+                                          })
                                         }
-                                        alt={`Screenshot of ${url}`}
-                                        className="w-full h-auto object-top block"
-                                        style={{ maxHeight: "320px", objectFit: "cover" }}
-                                      />
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            screenshotImg.data
+                                              ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}`
+                                              : screenshotImg.url
+                                          }
+                                          alt={`Screenshot of ${url}`}
+                                          className="w-full h-auto object-contain object-top block transition-transform duration-500 group-hover:scale-[1.01]"
+                                          style={{
+                                            maxHeight: screenshotImg.fullPage ? "280px" : "420px",
+                                          }}
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                          <div className="bg-white/90 dark:bg-gray-900/90 p-2 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                                            <Search className="w-5 h-5 text-violet-600" />
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {screenshotImg.fullPage ? (
+                                        <p className="px-4 py-2 text-[10px] text-violet-600/70 dark:text-violet-400/60 border-t border-violet-100 dark:border-violet-800/30">
+                                          Full-page capture — click image to zoom and scroll entire page
+                                        </p>
+                                      ) : null}
                                     </div>
                                   ) : null}
 
@@ -799,11 +863,8 @@ function AIChatInner({
                                         <img
                                           src={screenshotImg.data ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}` : screenshotImg.url}
                                           alt={`Screenshot of ${url}`}
-                                          className="w-full h-auto object-top block transition-transform duration-500 group-hover:scale-[1.02]"
-                                          style={{
-                                            maxHeight: "420px",
-                                            objectFit: "cover",
-                                          }}
+                                          className="w-full h-auto object-contain object-top block transition-transform duration-500 group-hover:scale-[1.01]"
+                                          style={{ maxHeight: "420px" }}
                                         />
                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                           <div className="bg-white/90 dark:bg-gray-900/90 p-2 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
