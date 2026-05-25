@@ -17,6 +17,7 @@ import {
   filterMcpToolsForModel,
   sanitizeMessagesForStorage,
 } from "@/lib/capture-screenshot";
+import { auditUiUxTool } from "@/lib/ui-ux-audit";
 
 export const maxDuration = 300;
 
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
 
   const modelTools = {
     capture_screenshot: captureScreenshotTool,
+    audit_ui_ux: auditUiUxTool,
     ...filterMcpToolsForModel(mcpTools),
   };
 
@@ -164,7 +166,13 @@ Report your findings clearly and concisely.
 SCREENSHOT TOOL:
 If the user asks to "show", "preview", "screenshot", or "take a photo" of a website, call the 'capture_screenshot' tool with just the URL.
 Do NOT call open_session, screenshot, or any session tools directly — capture_screenshot manages the browser session internally.
-After it returns, tell the user the screenshot is displayed below.`;
+After it returns, tell the user the screenshot is displayed below.
+
+UI/UX AUDIT TOOL:
+If the user asks for a UI audit, UX review, design feedback, usability analysis, or "audit the design" of a website, call 'audit_ui_ux' with the full URL.
+This tool captures a viewport screenshot and returns structured scores and recommendations — use those results to write a clear, friendly summary.
+Do NOT call capture_screenshot separately before audit_ui_ux; the audit tool already captures the page.
+After it returns, summarize the audit highlights and mention that the screenshot and detailed scores are shown below.`;
 
   const result = streamText({
     model: google("gemini-2.5-flash"),
@@ -172,8 +180,8 @@ After it returns, tell the user the screenshot is displayed below.`;
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-      google_search: google.tools.googleSearch({}),
-      //...modelTools,
+    //  google_search: google.tools.googleSearch({}),
+      ...modelTools,
     },
   });
 

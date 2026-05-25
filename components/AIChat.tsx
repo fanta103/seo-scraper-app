@@ -17,6 +17,9 @@ import {
   Download,
   ExternalLink,
   Search,
+  Layout,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import remarkGfm from "remark-gfm";
 import { SpiderLoader } from "@/components/SpiderLoader";
@@ -184,6 +187,11 @@ function AIChatInner({
                             "capture_screenshot" ||
                             partAny.toolName === "capture_screenshot")) ||
                         part.type === "tool-capture_screenshot";
+                      const isUiUxAudit =
+                        (isToolCall &&
+                          (partAny.toolInvocation?.toolName === "audit_ui_ux" ||
+                            partAny.toolName === "audit_ui_ux")) ||
+                        part.type === "tool-audit_ui_ux";
 
                       if (isStealthyFetch) {
                         const toolInvocation = partAny.toolInvocation || partAny;
@@ -350,6 +358,286 @@ function AIChatInner({
                                       )}
                                     </div>
                                   </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      }
+
+                      if (isUiUxAudit) {
+                        const toolInvocation = partAny.toolInvocation || partAny;
+                        const state =
+                          partAny.state ||
+                          toolInvocation.state ||
+                          (part.type === "tool-call"
+                            ? "call"
+                            : part.type === "tool-result"
+                              ? "result"
+                              : undefined);
+                        const resultData =
+                          toolInvocation.output ?? toolInvocation.result;
+                        const url =
+                          toolInvocation.input?.url ??
+                          toolInvocation.args?.url ??
+                          resultData?.screenshot?.websiteUrl ??
+                          resultData?.audit?.websiteUrl ??
+                          "the page";
+                        const screenshotImg = resultData?.screenshot;
+                        const audit = resultData?.audit;
+                        const auditError =
+                          resultData?.error ?? toolInvocation.errorText;
+                        const isDone =
+                          state === "output-available" ||
+                          state === "output-error" ||
+                          state === "result" ||
+                          audit ||
+                          auditError;
+
+                        const scoreColor = (score: number) =>
+                          score >= 75
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : score >= 50
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-red-600 dark:text-red-400";
+
+                        return (
+                          <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
+                            <AnimatePresence mode="wait">
+                              {!isDone && (
+                                <motion.div
+                                  key="auditing"
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  className="flex items-center gap-4 p-5 bg-violet-50/40 dark:bg-violet-900/10 border border-violet-100/50 dark:border-violet-800/30 rounded-[2rem] shadow-sm ring-1 ring-violet-500/5"
+                                >
+                                  <div className="shrink-0">
+                                    <SpiderLoader size={54} speed={1.2} variant="screenshot" />
+                                  </div>
+                                  <div className="flex flex-col flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-bold text-violet-600 bg-white/80 dark:bg-violet-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-violet-100/50 dark:border-violet-700/30 shadow-sm">
+                                        Design Audit
+                                      </span>
+                                      <span className="w-1 h-1 bg-violet-300 dark:bg-violet-700 rounded-full animate-pulse" />
+                                      <span className="text-[10px] font-semibold text-violet-500 uppercase tracking-widest">
+                                        Capturing &amp; analyzing
+                                      </span>
+                                    </div>
+                                    <div className="mt-2.5 text-[13px] font-medium text-violet-900/80 dark:text-violet-100/80 truncate">
+                                      Reviewing{" "}
+                                      <span className="text-violet-600 dark:text-violet-400 font-semibold">
+                                        {String(url).replace(/^https?:\/\//, "")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+
+                              {isDone && (
+                                <motion.div
+                                  key="audit-done"
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="space-y-4"
+                                >
+                                  {auditError && !audit && (
+                                    <div className="flex items-center gap-4 p-5 bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/50 rounded-[2rem]">
+                                      <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
+                                      <div>
+                                        <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">
+                                          UI/UX Audit Failed
+                                        </div>
+                                        <div className="text-[12px] text-red-700 dark:text-red-300">
+                                          {typeof auditError === "string"
+                                            ? auditError
+                                            : JSON.stringify(auditError)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {screenshotImg?.data || screenshotImg?.url?.startsWith("/api/") ? (
+                                    <div className="rounded-[1.5rem] overflow-hidden border border-violet-100 dark:border-violet-800/40 shadow-lg bg-white dark:bg-gray-900">
+                                      <div className="flex items-center justify-between px-4 py-2.5 bg-violet-50 dark:bg-violet-900/20 border-b border-violet-100 dark:border-violet-800/30">
+                                        <div className="flex items-center gap-2">
+                                          <Layout className="w-3.5 h-3.5 text-violet-600" />
+                                          <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 truncate max-w-[220px]">
+                                            {String(url).replace(/^https?:\/\//, "")}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={
+                                          screenshotImg.data
+                                            ? `data:${screenshotImg.mimeType};base64,${screenshotImg.data}`
+                                            : screenshotImg.url
+                                        }
+                                        alt={`Screenshot of ${url}`}
+                                        className="w-full h-auto object-top block"
+                                        style={{ maxHeight: "320px", objectFit: "cover" }}
+                                      />
+                                    </div>
+                                  ) : null}
+
+                                  {audit && (
+                                    <div className="rounded-[1.5rem] border border-violet-100 dark:border-violet-800/40 bg-white dark:bg-gray-900 shadow-lg overflow-hidden">
+                                      <div className="px-4 py-3 bg-violet-50 dark:bg-violet-900/20 border-b border-violet-100 dark:border-violet-800/30 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                          <Layout className="w-4 h-4 text-violet-600" />
+                                          <span className="text-sm font-bold text-violet-900 dark:text-violet-100">
+                                            UI/UX Audit
+                                          </span>
+                                        </div>
+                                        <span
+                                          className={cn(
+                                            "text-2xl font-black tabular-nums",
+                                            scoreColor(audit.overallScore),
+                                          )}
+                                        >
+                                          {audit.overallScore}
+                                          <span className="text-xs font-semibold text-gray-400 ml-0.5">
+                                            /100
+                                          </span>
+                                        </span>
+                                      </div>
+
+                                      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                          {audit.summary}
+                                        </p>
+                                      </div>
+
+                                      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                                          Category scores
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          {audit.categories?.map(
+                                            (cat: {
+                                              name: string;
+                                              score: number;
+                                              summary: string;
+                                            }) => (
+                                              <div
+                                                key={cat.name}
+                                                className="p-2 rounded-xl bg-gray-50 dark:bg-gray-800/60"
+                                              >
+                                                <div className="flex items-center justify-between gap-1">
+                                                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 capitalize truncate">
+                                                    {cat.name.replace(/_/g, " ")}
+                                                  </span>
+                                                  <span
+                                                    className={cn(
+                                                      "text-xs font-bold",
+                                                      scoreColor(cat.score),
+                                                    )}
+                                                  >
+                                                    {cat.score}
+                                                  </span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                                                  {cat.summary}
+                                                </p>
+                                              </div>
+                                            ),
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {audit.strengths?.length > 0 && (
+                                        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            Strengths
+                                          </div>
+                                          <ul className="space-y-1">
+                                            {audit.strengths.map((s: string, j: number) => (
+                                              <li
+                                                key={j}
+                                                className="text-xs text-gray-600 dark:text-gray-400 flex gap-1.5"
+                                              >
+                                                <span className="text-emerald-500">•</span>
+                                                {s}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {audit.issues?.length > 0 && (
+                                        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">
+                                            <AlertTriangle className="w-3 h-3" />
+                                            Issues
+                                          </div>
+                                          <ul className="space-y-2">
+                                            {audit.issues.map(
+                                              (
+                                                issue: {
+                                                  severity: string;
+                                                  area: string;
+                                                  finding: string;
+                                                  recommendation: string;
+                                                },
+                                                j: number,
+                                              ) => (
+                                                <li
+                                                  key={j}
+                                                  className="text-xs rounded-lg p-2 bg-gray-50 dark:bg-gray-800/60"
+                                                >
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <span
+                                                      className={cn(
+                                                        "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded",
+                                                        issue.severity === "critical"
+                                                          ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                                                          : issue.severity === "major"
+                                                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                                            : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+                                                      )}
+                                                    >
+                                                      {issue.severity}
+                                                    </span>
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                      {issue.area}
+                                                    </span>
+                                                  </div>
+                                                  <p className="text-gray-600 dark:text-gray-400">
+                                                    {issue.finding}
+                                                  </p>
+                                                  <p className="text-violet-600 dark:text-violet-400 mt-1">
+                                                    → {issue.recommendation}
+                                                  </p>
+                                                </li>
+                                              ),
+                                            )}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {audit.quickWins?.length > 0 && (
+                                        <div className="px-4 py-3">
+                                          <div className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-2">
+                                            Quick wins
+                                          </div>
+                                          <ul className="space-y-1">
+                                            {audit.quickWins.map((q: string, j: number) => (
+                                              <li
+                                                key={j}
+                                                className="text-xs text-gray-600 dark:text-gray-400 flex gap-1.5"
+                                              >
+                                                <span className="text-violet-500">⚡</span>
+                                                {q}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </motion.div>
                               )}
                             </AnimatePresence>
