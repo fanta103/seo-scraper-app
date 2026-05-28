@@ -9,47 +9,27 @@ from typing import Iterable
 from lxml.etree import XPath
 from scrapling.parser import Selector
 
-# Reuse Scrapling's hidden-element detection (inline styles, aria-hidden, template).
-_HIDDEN_XPATH = XPath(
-    './/*[contains(@style,"display:none") or contains(@style,"display: none")'
-    ' or contains(@style,"visibility:hidden") or contains(@style,"visibility: hidden")'
-    ' or contains(@style,"opacity:0") or contains(@style,"opacity: 0")'
-    ' or contains(@style,"font-size:0") or contains(@style,"font-size: 0")'
-    ' or contains(@style,"height:0") or contains(@style,"height: 0")'
-    ' or contains(@style,"width:0") or contains(@style,"width: 0")]'
-    " | .//*[@aria-hidden='true']"
-    " | .//template"
-)
+# Removed _HIDDEN_XPATH: SEO audits need to see hidden text to check for 
+# keyword stuffing (black-hat SEO) or screen-reader accessibility.
 
 _NOISE_TAGS = frozenset(
     {
         "style",
-        "noscript",
+        # "noscript" removed: <noscript> often contains important fallback images/links.
         "svg",
         "iframe",
         "embed",
         "object",
-        # Keep <picture> / <source> — dropping <picture> removes nested <img> from audits.
     }
 )
 
-_BOILERPLATE_TAGS = frozenset({"nav", "footer"})
-
-# Class/id substrings for global chrome, widgets, and consent UI.
+# Only target third-party noise: trackers, ads, chat widgets, and consent banners.
+# Removed: breadcrumbs, nav, footer, social, and promos (which contain valuable internal links/keywords).
 _BOILERPLATE_HINTS = re.compile(
     r"(?:cookie|gdpr|consent|onetrust|cookiebot|termly|trustarc|"
-    r"newsletter|signup|subscribe|promo-bar|banner-bar|"
-    r"breadcrumb|breadcrumbs|"
     r"chat-widget|intercom|drift|hubspot|livechat|zendesk|crisp|"
-    r"gtm|google-analytics|googletagmanager|facebook|twitter|linkedin|"
-    r"social-share|share-buttons|"
+    r"gtm|google-analytics|googletagmanager|"
     r"ad-slot|advertisement|adsbygoogle|doubleclick)",
-    re.I,
-)
-
-_HIDDEN_CLASS_HINTS = re.compile(
-    r"(?:\bhidden\b|sr-only|screen-reader|visually-hidden|d-none|u-hidden|"
-    r"is-hidden|invisible|offscreen|skip-link)",
     re.I,
 )
 
@@ -94,22 +74,11 @@ def _is_ld_json_script(element) -> bool:
 
 
 def _is_boilerplate_element(element) -> bool:
-    tag = (element.tag or "").lower()
-    if tag in _BOILERPLATE_TAGS:
-        return True
-
-    role = (element.get("role") or "").lower()
-    if role in {"navigation", "contentinfo", "banner"}:
-        return True
-
+    # Removed structural tag and role checks (<nav>, <footer>, navigation, banner) 
+    # to preserve internal linking architecture.
+    
     blob = _attrib_blob(element)
     if blob and _BOILERPLATE_HINTS.search(blob):
-        return True
-
-    if element.get("hidden") is not None:
-        return True
-
-    if blob and _HIDDEN_CLASS_HINTS.search(blob):
         return True
 
     return False
@@ -142,13 +111,6 @@ def _strip_attributes(element) -> None:
         del element.attrib[name]
 
 
-def _drop_elements(root, elements: Iterable) -> None:
-    for element in list(elements):
-        parent = element.getparent()
-        if parent is not None:
-            parent.remove(element)
-
-
 def refine_html_for_seo_audit(html: str, url: str | None = None) -> str:
     """Return audit-focused HTML: metadata, headings, links, images, and JSON-LD only."""
     if not html or not html.strip():
@@ -157,15 +119,13 @@ def refine_html_for_seo_audit(html: str, url: str | None = None) -> str:
     page = Selector(html, url=url)
     clean_root = deepcopy(page._root)
 
-    # Pass 1: remove scripts (keep JSON-LD), CSS, embeds, and chrome tags.
+    # Pass 1: remove non-JSON-LD scripts, CSS, embeds, and third-party widgets.
     for element in list(clean_root.iter()):
         if _should_drop_tag(element) or _is_boilerplate_element(element):
             element.drop_tree()
 
-    # Pass 2: hidden / injection-sanitizer targets (may remain after pass 1).
-    _drop_elements(clean_root, _HIDDEN_XPATH(clean_root))
-
-    # Pass 3: strip inline CSS and event handlers from surviving nodes.
+    # Pass 2: strip inline CSS and event handlers from surviving nodes.
+    # (Hidden node dropping pass was removed to keep accessibility/spam context).
     for element in clean_root.iter():
         if isinstance(element.tag, str):
             _strip_attributes(element)

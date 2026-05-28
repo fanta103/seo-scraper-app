@@ -25,7 +25,7 @@ async function runVisionAudit(
   const imageBuffer = Buffer.from(imageBase64, "base64");
 
   const { object } = await generateObject({
-    model: google("gemini-2.5-flash"),
+    model: google("gemini-3.5-flash"),
     schema: uiUxAuditSchema,
     messages: [
       {

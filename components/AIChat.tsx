@@ -4,7 +4,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, getLetterGrade } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import {
   MessageCircle,
@@ -600,18 +600,15 @@ function AIChatInner({
                                           <span className="text-sm font-bold text-violet-900 dark:text-violet-100">
                                             UI/UX Audit
                                           </span>
-                                        </div>
-                                        <span
-                                          className={cn(
-                                            "text-2xl font-black tabular-nums",
-                                            scoreColor(audit.overallScore),
-                                          )}
-                                        >
-                                          {audit.overallScore}
-                                          <span className="text-xs font-semibold text-gray-400 ml-0.5">
-                                            /100
+                                          <span
+                                            className={cn(
+                                              "text-2xl font-black",
+                                              scoreColor(audit.overallScore),
+                                            )}
+                                          >
+                                            {getLetterGrade(Number(audit.overallScore))}
                                           </span>
-                                        </span>
+                                        </div>
                                       </div>
 
                                       <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
@@ -620,42 +617,7 @@ function AIChatInner({
                                         </p>
                                       </div>
 
-                                      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                                          Category scores
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          {audit.categories?.map(
-                                            (cat: {
-                                              name: string;
-                                              score: number;
-                                              summary: string;
-                                            }) => (
-                                              <div
-                                                key={cat.name}
-                                                className="p-2 rounded-xl bg-gray-50 dark:bg-gray-800/60"
-                                              >
-                                                <div className="flex items-center justify-between gap-1">
-                                                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 capitalize truncate">
-                                                    {cat.name.replace(/_/g, " ")}
-                                                  </span>
-                                                  <span
-                                                    className={cn(
-                                                      "text-xs font-bold",
-                                                      scoreColor(cat.score),
-                                                    )}
-                                                  >
-                                                    {cat.score}
-                                                  </span>
-                                                </div>
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                                                  {cat.summary}
-                                                </p>
-                                              </div>
-                                            ),
-                                          )}
-                                        </div>
-                                      </div>
+
 
                                       {audit.strengths?.length > 0 && (
                                         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">

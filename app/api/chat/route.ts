@@ -82,10 +82,28 @@ export async function POST(req: Request) {
   };
 
   const validToolNames = new Set(Object.keys(modelTools));
+  
+  // Find all completed tool results to prevent AI_MissingToolResultsError for hanging tool calls
+  const validToolCallIds = new Set<string>();
+  for (const msg of allMessages) {
+    if (msg.parts) {
+      for (const part of msg.parts as any[]) {
+        if (part.type === 'tool-result') {
+          validToolCallIds.add(part.toolCallId);
+        }
+      }
+    }
+  }
+
   const preValidatedMessages = allMessages.map(msg => ({
     ...msg,
     parts: msg.parts ? msg.parts.filter((part: any) => {
-      if (part.type === 'tool-call' || part.type === 'tool-invocation' || part.type === 'tool-result') {
+      if (part.type === 'tool-call' || part.type === 'tool-invocation') {
+        if (!validToolNames.has(part.toolName)) return false;
+        // Drop dangling tool calls that never got a result
+        if (!validToolCallIds.has(part.toolCallId)) return false;
+      }
+      if (part.type === 'tool-result') {
         return validToolNames.has(part.toolName);
       }
       return true;
@@ -152,7 +170,7 @@ Provide specific, data-driven insights based on the actual report data. When ref
 TECHNICAL SEO / GEO AUDIT TOOL:
 If the user asks for a technical SEO audit, GEO technical audit, or HTML SEO review of a URL, call 'audit_technical_seo' with the full URL.
 This tool fetches refined HTML via stealthy_fetch, runs structured HTML checks (metadata, headings, canonical/noindex, JSON-LD, GEO/SSR content, mobile viewport, images, performance hints), and displays a scored audit card.
-After it returns, write a short friendly summary (3–5 sentences max). Reference each category by name and its 0–100 score only (e.g. "Metadata: 85/100") — never use internal point weights like "/15". Do NOT repeat the full checklist or duplicate issues already shown in the card.
+After it returns, write a short friendly summary (3–5 sentences max). Reference each category by name and its corresponding letter grade (A+ to F-) only (e.g. "Metadata: A+"). Do NOT use any numerical scores like "85/100" or raw numbers anywhere in your summary. Do NOT repeat the full checklist or duplicate issues already shown in the card.
 Do NOT call stealthy_fetch separately for technical SEO audits unless the user only wants raw HTML.
 
 The MCP server refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before analysis.
@@ -170,12 +188,12 @@ Do NOT call capture_screenshot separately before audit_ui_ux; the audit tool alr
 After it returns, summarize the audit highlights and mention that the screenshot and detailed scores are shown below.`;
 
   const result = streamText({
-    model: google("gemini-2.5-flash"),
+    model: google("gemini-3.5-flash"),
     messages: await convertToModelMessages(validatedMessages),
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-    //  google_search: google.tools.googleSearch({}),
+      //  google_search: google.tools.googleSearch({}),
       ...modelTools,
     },
   });
