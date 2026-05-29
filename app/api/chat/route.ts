@@ -1,12 +1,25 @@
 import { google } from "@ai-sdk/google";
-import { streamText, UIMessage, convertToModelMessages, stepCountIs, tool as aiTool } from "ai";
+import {
+  streamText,
+  UIMessage,
+  convertToModelMessages,
+  stepCountIs,
+  validateUIMessages,
+  createIdGenerator,
+  TypeValidationError,
+} from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { auth } from "@clerk/nextjs/server";
-import { getMcpTools, getMcpClient } from "@/lib/mcp-client";
-import { z } from "zod";
+import { getMcpTools } from "@/lib/mcp-client";
+import {
+  captureScreenshotTool,
+  filterMcpToolsForModel,
+  sanitizeMessagesForStorage,
+} from "@/lib/capture-screenshot";
+import { auditUiUxTool } from "@/lib/ui-ux-audit";
+import { auditTechnicalSeoTool } from "@/lib/technical-seo-audit";
 
-// Allow streaming responses up to 5 minutes (screenshots can be slow)
 export const maxDuration = 300;
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -15,127 +28,29 @@ if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 
-/**
- * capture_screenshot — a single tool the model calls with just a URL.
- * Internally handles: open_session → screenshot → close_session.
- * Session management must NOT be delegated to the model — it's infrastructure.
- */
-const captureScreenshotTool = aiTool({
-  description:
-    "Capture a full-page screenshot of any URL and display it inline in the chat. " +
-    "Use this whenever the user asks to 'show', 'preview', 'screenshot', or 'take a photo' of a website.",
-  parameters: z.object({
-    url: z.string().describe("The full URL of the page to capture (must start with http:// or https://)"),
-  }),
-  execute: async (args: Record<string, any>) => {
-    const url = args.url as string;
-    const client = await getMcpClient();
-    let sessionId: string | null = null;
-
-    try {
-      // Step 1: Open a dynamic browser session
-      console.log(`[capture_screenshot] Opening session for: ${url}`);
-      const sessionResult = await (client as any).callTool({
-        name: "open_session",
-        arguments: { session_type: "dynamic" },
-      });
-
-      // open_session returns a text item containing the SessionCreatedModel JSON
-      const sessionTextItem = Array.isArray(sessionResult.content)
-        ? sessionResult.content.find((c: any) => c.type === "text")
-        : null;
-
-      if (!sessionTextItem?.text) {
-        return { error: "Failed to open browser session: no session data returned." };
-      }
-
-      const sessionData = JSON.parse(sessionTextItem.text);
-      sessionId = sessionData.session_id as string;
-
-      if (!sessionId) {
-        return { error: "Failed to open browser session: session_id missing in response." };
-      }
-
-      console.log(`[capture_screenshot] Session opened: ${sessionId}`);
-
-      // Step 2: Take the screenshot
-      console.log(`[capture_screenshot] Capturing screenshot...`);
-      const screenshotResult = await (client as any).callTool({
-        name: "screenshot",
-        arguments: {
-          url,
-          session_id: sessionId,
-          full_page: true,
-          network_idle: true,
-          image_type: "png",
-          wait: 5000,
-        },
-      });
-
-      if (screenshotResult.isError) {
-        return { error: `Screenshot failed: ${JSON.stringify(screenshotResult.content)}` };
-      }
-
-      // Extract the base64 image from the content array
-      const imageItem = Array.isArray(screenshotResult.content)
-        ? screenshotResult.content.find((c: any) => c.type === "image" && c.data)
-        : null;
-
-      if (imageItem) {
-        console.log(`[capture_screenshot] Screenshot captured successfully.`);
-        return {
-          screenshot: {
-            data: imageItem.data as string,
-            mimeType: (imageItem.mimeType ?? "image/png") as string,
-            url,
-          },
-        };
-      }
-
-      // Fallback: look for an error text item in the result
-      const errorItem = Array.isArray(screenshotResult.content)
-        ? screenshotResult.content.find((c: any) => c.type === "text")
-        : null;
-
-      return { error: errorItem?.text ?? "Screenshot returned no image data." };
-
-    } catch (err: any) {
-      console.error("[capture_screenshot] Error:", err);
-      const message = err?.message ?? String(err);
-      if (message.includes("timeout")) {
-        return { error: "The page took too long to load. Try a simpler URL." };
-      }
-      if (message.includes("net::ERR") || message.includes("invalid URL")) {
-        return { error: `Invalid or unreachable URL: ${url}` };
-      }
-      return { error: `Screenshot failed: ${message}` };
-
-    } finally {
-      // Always close the session to free resources, even on failure
-      if (sessionId) {
-        console.log(`[capture_screenshot] Closing session: ${sessionId}`);
-        await (client as any)
-          .callTool({ name: "close_session", arguments: { session_id: sessionId } })
-          .catch((e: any) => console.warn("[capture_screenshot] Failed to close session:", e));
-      }
-    }
-  },
-} as any);
-
 export async function POST(req: Request) {
   const { userId } = await auth();
 
   if (!userId) {
-    throw new Error("User ID is not set");
+    return new Response("Unauthorized", { status: 401 });
   }
 
-  const {
-    messages,
-    id,
-  }: {
-    messages: UIMessage[];
-    id: string;
-  } = await req.json();
+  const body = await req.json();
+  const snapshotId: string = body.id;
+
+  if (!snapshotId) {
+    return new Response("Report id is required", { status: 400 });
+  }
+
+  // Persistence: last message only (new) or full history (legacy fallback)
+  let incomingMessage: UIMessage | undefined = body.message;
+  if (!incomingMessage && Array.isArray(body.messages) && body.messages.length > 0) {
+    incomingMessage = body.messages[body.messages.length - 1] as UIMessage;
+  }
+
+  if (!incomingMessage) {
+    return new Response("Message is required", { status: 400 });
+  }
 
   let mcpTools = {};
   try {
@@ -144,21 +59,83 @@ export async function POST(req: Request) {
     console.error("Failed to load MCP tools:", error);
   }
 
+  let previousMessages: UIMessage[] = [];
+  try {
+    previousMessages = await convex.query(api.reportChats.getMessages, {
+      snapshotId,
+      userId,
+    });
+  } catch (error) {
+    console.error("Failed to load chat messages:", error);
+  }
+
+  const allMessages: UIMessage[] = [
+    ...sanitizeMessagesForStorage(previousMessages as UIMessage[]),
+    incomingMessage,
+  ];
+
+  const modelTools = {
+    capture_screenshot: captureScreenshotTool,
+    audit_ui_ux: auditUiUxTool,
+    audit_technical_seo: auditTechnicalSeoTool,
+    ...filterMcpToolsForModel(mcpTools),
+  };
+
+  const validToolNames = new Set(Object.keys(modelTools));
+  
+  // Find all completed tool results to prevent AI_MissingToolResultsError for hanging tool calls
+  const validToolCallIds = new Set<string>();
+  for (const msg of allMessages) {
+    if (msg.parts) {
+      for (const part of msg.parts as any[]) {
+        if (part.type === 'tool-result') {
+          validToolCallIds.add(part.toolCallId);
+        }
+      }
+    }
+  }
+
+  const preValidatedMessages = allMessages.map(msg => ({
+    ...msg,
+    parts: msg.parts ? msg.parts.filter((part: any) => {
+      if (part.type === 'tool-call' || part.type === 'tool-invocation') {
+        if (!validToolNames.has(part.toolName)) return false;
+        // Drop dangling tool calls that never got a result
+        if (!validToolCallIds.has(part.toolCallId)) return false;
+      }
+      if (part.type === 'tool-result') {
+        return validToolNames.has(part.toolName);
+      }
+      return true;
+    }) : []
+  })).filter(msg => msg.parts.length > 0);
+
+  let validatedMessages: UIMessage[];
+  try {
+    validatedMessages = await validateUIMessages({
+      messages: preValidatedMessages,
+      tools: modelTools,
+    });
+  } catch (error) {
+    console.error("Chat message validation failed:", error);
+    // Fallback safely so the chat doesn't break
+    validatedMessages = [incomingMessage];
+  }
+
   let seoReportData = null;
 
   let systemPrompt = `You are an AI assistant helping users understand their SEO report.
   
   Provide helpful insights and answer questions about the SEO data and recommendations.`;
 
-  if (id) {
-    try {
-      const job = await convex.query(api.scrapingJobs.getJobBySnapshotId, {
-        snapshotId: id,
-        userId: userId,
-      });
-      if (job?.seoReport) {
-        seoReportData = job.seoReport;
-        systemPrompt = `You are an AI assistant helping users understand their SEO report.
+  try {
+    const job = await convex.query(api.scrapingJobs.getJobBySnapshotId, {
+      snapshotId,
+      userId,
+    });
+    if (job?.seoReport) {
+      seoReportData = job.seoReport;
+      systemPrompt = `You are an AI assistant helping users understand their SEO report.
       
       CURRENT SEO REPORT DATA:
 
@@ -178,56 +155,66 @@ Key areas you can help with:
 Use your native google_search tool to answer questions about the SEO report if it will help you answer the question.
 IMPORTANT: Whenever you are about to search the web, you MUST start your response with exactly this token on its own line: [SEARCHING_WEB] - then proceed with the search and your answer. Do not skip this token when performing any web search.
 
-Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`;
-      } else {
-        systemPrompt += `\n\nNote: SEO report with ID "${id}" was found but analysis may still be in progress or failed. Please check the report status.`;
-      }
-    } catch (error) {
-      console.error("Error fetching SEO report:", error);
-      systemPrompt += `\n\nNote: Unable to fetch SEO report data for ID "${id}". The report may not exist or you may not have access to it.`;
+Provide specific, data-driven insights based on the actual report data. When referencing metrics, use the exact numbers from the report. Be conversational but informative.`
+
+    } else {
+      systemPrompt += `\n\nNote: SEO report with ID "${snapshotId}" was found but analysis may still be in progress or failed. Please check the report status.`;
     }
+  } catch (error) {
+    console.error("Error fetching SEO report:", error);
+    systemPrompt += `\n\nNote: Unable to fetch SEO report data for ID "${snapshotId}". The report may not exist or you may not have access to it.`;
   }
 
   systemPrompt += `
 
-You are equipped with the Scrapling MCP Server which provides web scraping tools for Technical SEO audits.
-If the user asks for a technical SEO audit, you MUST use the 'stealthy_fetch' tool.
-TOOL PARAMETERS FOR 'stealthy_fetch':
-- url: The full URL to audit (compulsory)
-- main_content_only: false (compulsory for SEO audits)
-- extraction_type: "html" (compulsory for SEO audits)
-Do NOT invent or guess other parameters.
+TECHNICAL SEO / GEO AUDIT TOOL:
+If the user asks for a technical SEO audit, GEO technical audit, or HTML SEO review of a URL, call 'audit_technical_seo' with the full URL.
+This tool fetches refined HTML via stealthy_fetch, runs structured HTML checks (metadata, headings, canonical/noindex, JSON-LD, GEO/SSR content, mobile viewport, images, performance hints), and displays a scored audit card.
+After it returns, write a short friendly summary (3–5 sentences max). Reference each category by name and its corresponding letter grade (A+ to F-) only (e.g. "Metadata: A+"). Do NOT use any numerical scores like "85/100" or raw numbers anywhere in your summary. Do NOT repeat the full checklist or duplicate issues already shown in the card.
+Do NOT call stealthy_fetch separately for technical SEO audits unless the user only wants raw HTML.
 
-When analyzing the fetched HTML for technical SEO, check for:
-- Meta tags: <title>, <meta name="description">, and <meta name="robots">.
-- Canonical link: <link rel="canonical" href="...">
-- Headings: exactly one <h1>, properly nested <h2>s.
-- Image accessibility: missing alt attributes.
-- Structured data: <script type="application/ld+json">.
-Report your findings clearly and concisely.
+The MCP server refines fetched HTML (strips scripts except JSON-LD, CSS, nav/footer, widgets, hidden markup) before analysis.
+HTML audits cannot verify robots.txt, AI crawler access, HTTP headers, Core Web Vitals, or TTFB — mention that when relevant.
 
 SCREENSHOT TOOL:
 If the user asks to "show", "preview", "screenshot", or "take a photo" of a website, call the 'capture_screenshot' tool with just the URL.
 Do NOT call open_session, screenshot, or any session tools directly — capture_screenshot manages the browser session internally.
-After it returns, tell the user the screenshot is displayed below.`;
+After it returns, tell the user the screenshot is displayed below.
+
+UI/UX AUDIT TOOL:
+If the user asks for a UI audit, UX review, design feedback, usability analysis, or "audit the design" of a website, call 'audit_ui_ux' with the full URL.
+This tool captures a full-page screenshot (entire scrollable page) and returns structured scores and recommendations — use those results to write a clear, friendly summary.
+Do NOT call capture_screenshot separately before audit_ui_ux; the audit tool already captures the page.
+After it returns, summarize the audit highlights and mention that the screenshot and detailed scores are shown below.`;
 
   const result = streamText({
-    model: google("gemini-2.5-flash"),
-    messages: await convertToModelMessages(messages),
+    model: google("gemini-3.5-flash"),
+    messages: await convertToModelMessages(validatedMessages),
     system: systemPrompt,
     stopWhen: stepCountIs(5),
     tools: {
-      //google_search: google.tools.googleSearch({}),
-      // Single tool for screenshots — session lifecycle handled inside execute()
-      capture_screenshot: captureScreenshotTool,
-      // MCP tools for SEO audits — hide raw session/screenshot primitives from the model
-      ...Object.fromEntries(
-        Object.entries(mcpTools).filter(
-          ([name]) => !["open_session", "close_session", "list_sessions", "screenshot"].includes(name)
-        )
-      ),
+      //  google_search: google.tools.googleSearch({}),
+      ...modelTools,
     },
   });
 
-  return result.toUIMessageStreamResponse();
+
+  result.consumeStream();
+
+  return result.toUIMessageStreamResponse({
+    originalMessages: validatedMessages,
+    generateMessageId: createIdGenerator({ prefix: "msg", size: 16 }),
+    onFinish: async ({ messages, isAborted }) => {
+      if (isAborted) return;
+      try {
+        await convex.mutation(api.reportChats.saveMessages, {
+          snapshotId,
+          userId,
+          messages: sanitizeMessagesForStorage(messages),
+        });
+      } catch (error) {
+        console.error("Failed to save chat messages:", error);
+      }
+    },
+  });
 }

@@ -10,6 +10,7 @@
 
 import type * as analysis from "../analysis.js";
 import type * as http from "../http.js";
+import type * as reportChats from "../reportChats.js";
 import type * as scrapingJobs from "../scrapingJobs.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analysis: typeof analysis;
   http: typeof http;
+  reportChats: typeof reportChats;
   scrapingJobs: typeof scrapingJobs;
 }>;
 

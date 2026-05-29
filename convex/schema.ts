@@ -34,4 +34,11 @@ export default defineSchema({
     .index("by_created_at", ["createdAt"])
     .index("by_user", ["userId"])
     .index("by_user_and_created_at", ["userId", "createdAt"]),
+
+  reportChats: defineTable({
+    snapshotId: v.string(),
+    userId: v.string(),
+    messages: v.any(),
+    updatedAt: v.number(),
+  }).index("by_user_and_snapshot", ["userId", "snapshotId"]),
 });

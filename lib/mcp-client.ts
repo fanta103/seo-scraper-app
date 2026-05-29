@@ -1,7 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { tool as aiTool } from "ai";
-import { z } from "zod";
+import { jsonSchema, tool as aiTool } from "ai";
 
 let mcpClient: Client | null = null;
 let mcpTransport: SSEClientTransport | null = null;
@@ -54,8 +53,9 @@ export async function getMcpTools() {
 
     aiTools[mcpTool.name] = aiTool({
       description: `${description}\n\nParameters JSON Schema: ${schemaStr}`,
-      parameters: z.object({}).passthrough(),
-      execute: async (args: Record<string, any>) => {
+      inputSchema: jsonSchema(mcpTool.inputSchema as Record<string, unknown>),
+      execute: async (input) => {
+        const args = input as Record<string, unknown>;
         console.log(`Executing MCP tool ${mcpTool.name} with args:`, args);
         try {
           const result = await (client as any).callTool({
@@ -69,24 +69,24 @@ export async function getMcpTools() {
           }
 
           // Screenshot tool returns an array with an image content item.
-          // We extract the base64 data and return a structured object so
-          // the UI can render it as an <img> without parsing raw bytes.
           if (mcpTool.name === "screenshot" && Array.isArray(result.content)) {
             const imageItem = result.content.find(
-              (item: any) => item.type === "image" && item.data
+              (item: { type?: string; data?: string; mimeType?: string }) =>
+                item.type === "image" && item.data,
             );
             if (imageItem) {
               return {
                 screenshot: {
-                  data: imageItem.data,           // base64 string
+                  data: imageItem.data,
                   mimeType: imageItem.mimeType ?? "image/png",
                   url: args.url,
                 },
               };
             }
-            // Fallback: screenshot returned text content (e.g. error message)
-            const textItem = result.content.find((item: any) => item.type === "text");
-            if (textItem) {
+            const textItem = result.content.find(
+              (item: { type?: string; text?: string }) => item.type === "text",
+            );
+            if (textItem?.text) {
               return { error: textItem.text };
             }
           }

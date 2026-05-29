@@ -1,26 +1,58 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, getLetterGrade } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText, Camera, Download, ExternalLink } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Globe, Shield, Zap, Search, FileText } from "lucide-react";
 import remarkGfm from "remark-gfm";
 import { SpiderLoader } from "@/components/SpiderLoader";
+import { TechnicalSeoAuditCard } from "@/components/TechnicalSeoAuditCard";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useUser } from "@clerk/nextjs";
 
-function AIChat({ seoReportId }: { seoReportId: string }) {
+function messageHasVisibleContent(message: UIMessage): boolean {
+  return message.parts.some(
+    (part) =>
+      (part.type === "text" &&
+        part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0) ||
+      part.type === "tool-invocation" ||
+      part.type === "tool-call" ||
+      part.type === "tool-result" ||
+      (part.type as string).startsWith("tool-"),
+  );
+}
+
+function AIChatInner({
+  seoReportId,
+  initialMessages,
+}: {
+  seoReportId: string;
+  initialMessages: UIMessage[];
+}) {
   const [input, setInput] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
-  const [fullScreenImage, setFullScreenImage] = useState<{ data: string; mimeType: string; url: string } | null>(null);
   const { messages, sendMessage, status } = useChat({
     id: seoReportId,
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
-      body: { id: seoReportId },
+      prepareSendMessagesRequest({ messages, id }) {
+        return {
+          body: {
+            message: messages[messages.length - 1],
+            id,
+          },
+        };
+      },
     }),
+    onError: (err) => {
+      console.error("Chat stream error:", err);
+    },
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -43,16 +75,27 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
   };
 
   const isLoading = status === "streaming" || status === "submitted";
-  const isTyping = status === "submitted";
+  const canSend = !isLoading;
 
-  // Detect [SEARCHING_WEB] token in the last assistant message
-  const lastAssistantMessage = messages[messages.length - 1]?.role === "assistant"
-    ? messages[messages.length - 1]
-    : null;
+  const lastMessage = messages[messages.length - 1];
+  const lastAssistantMessage =
+    lastMessage?.role === "assistant" ? lastMessage : null;
 
-  const isSearching = lastAssistantMessage?.parts.some(
-    (p) => p.type === "text" && p.text?.includes("[SEARCHING_WEB]") && p.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length === 0
-  ) ?? false;
+  const isSearching =
+    lastAssistantMessage?.parts.some(
+      (p) =>
+        p.type === "text" &&
+        p.text?.includes("[SEARCHING_WEB]") &&
+        p.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length === 0,
+    ) ?? false;
+
+  // Keep indicator visible through submitted + early streaming until text/tools appear
+  const showPendingIndicator =
+    isLoading &&
+    !isSearching &&
+    (!lastMessage ||
+      lastMessage.role === "user" ||
+      !messageHasVisibleContent(lastMessage));
 
   return (
     <>
@@ -92,15 +135,7 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
             )}
 
             {messages.map((message, idx) => {
-              const hasVisibleContent = message.parts.some(part =>
-                (part.type === "text" && part.text.replace(/\[SEARCHING_WEB\]/g, "").trim().length > 0) ||
-                (part.type === "tool-invocation") ||
-                (part.type === "tool-call") ||
-                (part.type === "tool-result") ||
-                (part.type as string).startsWith("tool-")
-              );
-
-              if (!hasVisibleContent) return null;
+              if (!messageHasVisibleContent(message)) return null;
 
               return (
                 <div
@@ -123,7 +158,6 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                       // Handle Tool Invocations (like stealthy_fetch from MCP)
                       const isToolCall = part.type === "tool-invocation" || part.type === "tool-call" || part.type === "tool-result";
                       const isStealthyFetch = (isToolCall && (partAny.toolInvocation?.toolName === "stealthy_fetch" || partAny.toolName === "stealthy_fetch")) || part.type === "tool-stealthy_fetch";
-                      const isScreenshot = (isToolCall && (partAny.toolInvocation?.toolName === "capture_screenshot" || partAny.toolName === "capture_screenshot")) || part.type === "tool-capture_screenshot";
 
                       if (isStealthyFetch) {
                         const toolInvocation = partAny.toolInvocation || partAny;
@@ -135,20 +169,9 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
 
                         // Phase detection
-                        const hasResult = state === "result" || toolInvocation.output || toolInvocation.result;
-                        let phase: "extraction" | "analysis" | "complete";
-
-                        if (state === "call" || state === "input-streaming" || state === "input-available") {
-                          phase = "extraction";
-                        } else if (hasResult) {
-                          if (isScreenshot) {
-                            phase = "complete";
-                          } else {
-                            phase = isCurrentlyStreaming ? "analysis" : "complete";
-                          }
-                        } else {
-                          phase = isCurrentlyStreaming ? "analysis" : "complete";
-                        }
+                        const phase = (state === "call" || state === "input-streaming" || state === "input-available")
+                          ? "extraction"
+                          : (isCurrentlyStreaming ? "analysis" : "complete");
 
                         return (
                           <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
@@ -295,150 +318,6 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
                         );
                       }
 
-                      // ── Screenshot Tool ─────────────────────────────────────────
-                      if (isScreenshot) {
-                        const toolInvocation = partAny.toolInvocation || partAny;
-                        const state = partAny.state || toolInvocation.state || (part.type === "tool-call" ? "call" : part.type === "tool-result" ? "result" : undefined);
-                        const { args } = toolInvocation;
-                        const url = args?.url || "the page";
-
-                        const isLastAssistantMessage = message.role === "assistant" && idx === messages.length - 1;
-                        const isCurrentlyStreaming = isLastAssistantMessage && isLoading;
-
-                        const resultData = toolInvocation.output || toolInvocation.result;
-                        const screenshotImg = resultData?.screenshot;
-                        const screenshotError = resultData?.error;
-
-                        const screenshotPhase = (state === "result" || screenshotImg || screenshotError)
-                          ? "done"
-                          : "rendering";
-
-                        return (
-                          <div key={`${message.id}-${i}`} className="my-4 overflow-hidden">
-                            <AnimatePresence mode="wait">
-                              {/* ── Rendering phase (green spider) ── */}
-                              {screenshotPhase === "rendering" && (
-                                <motion.div
-                                  key="rendering"
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95 }}
-                                  transition={{ duration: 0.4, ease: "easeOut" }}
-                                  className="flex items-center gap-4 p-5 bg-emerald-50/40 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-800/30 rounded-[2rem] shadow-sm ring-1 ring-emerald-500/5"
-                                >
-                                  <div className="shrink-0">
-                                    <SpiderLoader size={54} speed={1.4} variant="screenshot" />
-                                  </div>
-                                  <div className="flex flex-col flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-emerald-600 bg-white/80 dark:bg-emerald-900/40 uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-emerald-100/50 dark:border-emerald-700/30 shadow-sm">Crawlero Bot 📸</span>
-                                      <span className="w-1 h-1 bg-emerald-300 dark:bg-emerald-700 rounded-full animate-pulse" />
-                                      <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest">Rendering Page</span>
-                                    </div>
-                                    <div className="mt-2.5">
-                                      <div className="text-[13px] font-medium text-emerald-900/80 dark:text-emerald-100/80 truncate">
-                                        Capturing <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{url.replace(/^https?:\/\//, '')}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 mt-1">
-                                        <div className="flex gap-0.5">
-                                          <span className="w-1 h-1 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                          <span className="w-1 h-1 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                          <span className="w-1 h-1 bg-emerald-400 rounded-full animate-bounce" />
-                                        </div>
-                                        <div className="text-[10px] text-emerald-500/80 font-medium italic">Waiting for page to fully render...</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              )}
-
-                              {/* ── Done: show image or error ── */}
-                              {screenshotPhase === "done" && (
-                                <motion.div
-                                  key="done"
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.5, ease: "easeOut" }}
-                                >
-                                  {screenshotError ? (
-                                    // Error state
-                                    <div className="flex items-center gap-4 p-5 bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/50 rounded-[2rem]">
-                                      <div className="shrink-0">
-                                        <SpiderLoader size={54} speed={0.5} variant="error" />
-                                      </div>
-                                      <div>
-                                        <div className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Screenshot Failed</div>
-                                        <div className="text-[12px] text-red-700 dark:text-red-300 italic">
-                                          {typeof screenshotError === "string" ? screenshotError : JSON.stringify(screenshotError)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ) : screenshotImg ? (
-                                    // Success: inline image card
-                                    <div className="rounded-[1.5rem] overflow-hidden border border-emerald-100 dark:border-emerald-800/40 shadow-lg bg-white dark:bg-gray-900">
-                                      {/* Card header */}
-                                      <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
-                                        <div className="flex items-center gap-2">
-                                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                                          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 truncate max-w-[220px]">
-                                            {url.replace(/^https?:\/\//, '')}
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                          {/* Download button */}
-                                          <a
-                                            href={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
-                                            download={`screenshot-${Date.now()}.png`}
-                                            className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
-                                            title="Download screenshot"
-                                          >
-                                            <Download className="w-3.5 h-3.5 text-emerald-600" />
-                                          </a>
-                                          {/* Open URL button */}
-                                          <a
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
-                                            title="Open page"
-                                          >
-                                            <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
-                                          </a>
-                                        </div>
-                                      </div>
-                                      {/* The screenshot image */}
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <div
-                                        className="relative cursor-zoom-in group"
-                                        onClick={() => setFullScreenImage({
-                                          data: screenshotImg.data,
-                                          mimeType: screenshotImg.mimeType,
-                                          url: url
-                                        })}
-                                      >
-                                        <img
-                                          src={`data:${screenshotImg.mimeType};base64,${screenshotImg.data}`}
-                                          alt={`Screenshot of ${url}`}
-                                          className="w-full h-auto object-top block transition-transform duration-500 group-hover:scale-[1.02]"
-                                          style={{ maxHeight: "420px", objectFit: "cover" }}
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                          <div className="bg-white/90 dark:bg-gray-900/90 p-2 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                                            <Search className="w-5 h-5 text-indigo-600" />
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        );
-                      }
-
-
-
                       if (part.type === "text") {
                         const cleanText = part.text.replace(/\[SEARCHING_WEB\]/g, "").trim();
                         if (!cleanText) return null;
@@ -505,13 +384,15 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
               </div>
             )}
 
-            {/* Typing indicator — shown while loading and NOT searching */}
-            {isTyping && !isSearching && (
+            {/* Pending indicator — until assistant text or tool UI is visible */}
+            {showPendingIndicator && (
               <div className="flex justify-start">
                 <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                  <div className="flex items-center gap-1">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">AI is Thinking...</span>
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      AI is thinking…
+                    </span>
                   </div>
                 </div>
               </div>
@@ -520,85 +401,32 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
           </div >
 
           {/* Input */}
-          < div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50" >
+          <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+            {error && (
+              <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+                {error.message}
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="flex gap-3">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about your SEO report..."
                 className="flex-1 h-11 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-600 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 placeholder:text-gray-400"
-                disabled={isLoading}
+                disabled={!canSend}
               />
               <Button
                 type="submit"
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || !canSend}
                 className="h-11 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-sm"
               >
                 <Send className="w-4 h-4" />
               </Button>
             </form>
-          </div >
+          </div>
         </div >
       )
       }
-
-      {/* Full Screen Image Modal */}
-      <AnimatePresence>
-        {fullScreenImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4 md:p-10"
-            onClick={() => setFullScreenImage(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative max-w-full max-h-full flex flex-col items-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
-              <div className="absolute -top-12 left-0 right-0 flex items-center justify-between text-white px-2">
-                <div className="flex items-center gap-3">
-                  <Camera className="w-5 h-5 text-emerald-400" />
-                  <span className="text-sm font-medium truncate max-w-[200px] md:max-w-md">
-                    {fullScreenImage.url}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <a
-                    href={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
-                    download={`screenshot-${Date.now()}.png`}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span className="hidden md:inline">Download</span>
-                  </a>
-                  <button
-                    onClick={() => setFullScreenImage(null)}
-                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-
-              {/* The full resolution image */}
-              <div className="overflow-auto custom-scrollbar rounded-xl shadow-2xl border border-white/10">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`data:${fullScreenImage.mimeType};base64,${fullScreenImage.data}`}
-                  alt="Full screen screenshot"
-                  className="max-w-none block"
-                />
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Toggle Button */}
       <div className="fixed bottom-6 right-6 z-50">
@@ -614,6 +442,22 @@ function AIChat({ seoReportId }: { seoReportId: string }) {
         </Button>
       </div>
     </>
+  );
+}
+
+function AIChat({ seoReportId }: { seoReportId: string }) {
+  const { user } = useUser();
+  const savedMessages = useQuery(
+    api.reportChats.getMessages,
+    user?.id ? { snapshotId: seoReportId, userId: user.id } : "skip",
+  );
+
+  if (savedMessages === undefined) {
+    return null;
+  }
+
+  return (
+    <AIChatInner seoReportId={seoReportId} initialMessages={savedMessages} />
   );
 }
 
